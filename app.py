@@ -4,7 +4,7 @@ st.set_page_config(page_title="Compact YouTube Grid", layout="wide")
 
 # --- Video IDs ---
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id]*100  # 100 video thumbnails
+video_ids = [video_id]*100  # 100 videos
 
 # --- Generate video blocks ---
 blocks = []
@@ -14,24 +14,24 @@ for i, vid in enumerate(video_ids):
          style="cursor:pointer;">
         <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp" 
              loading="lazy"
-             style="width:100%;aspect-ratio:16/9;border-radius:4px;">
+             style="width:100%;aspect-ratio:16/9;border-radius:2px;">
     </div>
     """)
 
 # --- HTML + JS ---
 html = f"""
-<div style="margin-bottom:10px;">
-<button id="play-all" style="padding:8px 16px;font-size:14px;cursor:pointer;">
+<div style="margin-bottom:8px;">
+<button id="play-all" style="padding:6px 12px;font-size:12px;cursor:pointer;">
 Play All Sequentially
 </button>
 </div>
 
 <div id="video-grid" style="
 background:#000;
-padding:10px;
+padding:6px;
 display:grid;
-grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
-gap:6px;
+grid-template-columns:repeat(auto-fit,minmax(60px,1fr));
+gap:4px;
 max-height:90vh;
 overflow-y:auto;">
 {''.join(blocks)}
@@ -39,7 +39,7 @@ overflow-y:auto;">
 
 <style>
 .video-box:hover {{
-    transform: scale(1.05);
+    transform: scale(1.1);
     transition: transform 0.2s;
 }}
 .fade-out {{
