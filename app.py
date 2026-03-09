@@ -1,48 +1,50 @@
 import streamlit as st
 
-st.set_page_config(page_title="YouTube Video Grid", layout="wide")
+st.set_page_config(page_title="Compact YouTube Grid", layout="wide")
 
-# --- Video IDs (replace with multiple if needed) ---
+# --- Video IDs ---
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id]*20  # repeat the same video for demonstration
+video_ids = [video_id]*100  # 100 video thumbnails
 
 # --- Generate video blocks ---
 blocks = []
 for i, vid in enumerate(video_ids):
     blocks.append(f"""
     <div class="video-box" id="player{i}" data-video="{vid}" data-index="{i}" 
-         style="cursor:pointer;margin:5px;">
+         style="cursor:pointer;">
         <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp" 
              loading="lazy"
-             style="width:100%;aspect-ratio:16/9;border-radius:6px;">
+             style="width:100%;aspect-ratio:16/9;border-radius:4px;">
     </div>
     """)
 
 # --- HTML + JS ---
 html = f"""
 <div style="margin-bottom:10px;">
-<button id="play-all" style="padding:10px 20px;font-size:16px;cursor:pointer;">
+<button id="play-all" style="padding:8px 16px;font-size:14px;cursor:pointer;">
 Play All Sequentially
 </button>
 </div>
 
 <div id="video-grid" style="
 background:#000;
-padding:20px;
+padding:10px;
 display:grid;
-grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-gap:10px;">
+grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+gap:6px;
+max-height:90vh;
+overflow-y:auto;">
 {''.join(blocks)}
 </div>
 
 <style>
 .video-box:hover {{
-    transform: scale(1.03);
-    transition: transform 0.3s;
+    transform: scale(1.05);
+    transition: transform 0.2s;
 }}
 .fade-out {{
     opacity: 0;
-    transition: opacity 0.7s ease;
+    transition: opacity 0.5s ease;
 }}
 </style>
 
@@ -90,7 +92,7 @@ function loadVideo(index, video) {{
                         delete players[index];
                         let box = document.getElementById("player"+index);
                         box.classList.add("fade-out");
-                        setTimeout(()=>{{ box.remove() }}, 700);
+                        setTimeout(()=>{{ box.remove() }}, 500);
                     }}, stopTime*1000);
                 }}
             }}
@@ -110,5 +112,4 @@ document.getElementById("play-all").addEventListener("click", async ()=>{{
 </script>
 """
 
-# --- Embed HTML in Streamlit ---
-st.components.v1.html(html, height=1200, scrolling=True)
+st.components.v1.html(html, height=900, scrolling=True)
