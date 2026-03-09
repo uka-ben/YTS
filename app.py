@@ -1,0 +1,114 @@
+import streamlit as st
+
+st.set_page_config(page_title="YouTube Video Grid", layout="wide")
+
+# --- Video IDs ---
+video_id = "JZYnS6ypa2g"
+video_ids = [video_id]*20  # repeat the same video, can replace with multiple IDs
+
+# --- Generate video blocks ---
+blocks = []
+for i, vid in enumerate(video_ids):
+    blocks.append(f"""
+    <div class="video-box" id="player{i}" data-video="{vid}" data-index="{i}" 
+         style="cursor:pointer;margin:5px;">
+        <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp" 
+             loading="lazy"
+             style="width:100%;aspect-ratio:16/9;border-radius:6px;">
+    </div>
+    """)
+
+# --- Full HTML + JS ---
+html = f"""
+<div style="margin-bottom:10px;">
+<button id="play-all" style="padding:10px 20px;font-size:16px;cursor:pointer;">
+Play All Sequentially
+</button>
+</div>
+
+<div id="video-grid" style="
+background:#000;
+padding:20px;
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+gap:10px;">
+{''.join(blocks)}
+</div>
+
+<style>
+.video-box:hover {{
+    transform: scale(1.03);
+    transition: transform 0.3s;
+}}
+.fade-out {{
+    opacity: 0;
+    transition: opacity 0.7s ease;
+}}
+</style>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<script>
+let players = {{}};
+let timers = {{}};
+
+function randomStopTime() {{
+    return Math.floor(Math.random()*(45-35+1))+35;
+}}
+
+function onYouTubeIframeAPIReady() {{
+    document.querySelectorAll(".video-box").forEach(box=>{
+        let vid = box.dataset.video;
+        let idx = box.dataset.index;
+        box.addEventListener("click",()=>loadVideo(idx,vid));
+    });
+}}
+
+function loadVideo(index, video) {{
+    if(players[index]) {{
+        players[index].playVideo();
+        return;
+    }}
+    players[index] = new YT.Player("player"+index,{{
+        videoId: video,
+        playerVars: {{
+            autoplay:1,
+            playsinline:1,
+            rel:0,
+            modestbranding:1,
+            vq:"tiny",
+            controls:1
+        }},
+        events: {{
+            'onStateChange': function(e){{
+                if(e.data === YT.PlayerState.PLAYING){{
+                    clearTimeout(timers[index]);
+                    let stopTime = randomStopTime();
+                    timers[index] = setTimeout(()=>{
+                        players[index].stopVideo();
+                        players[index].destroy();
+                        delete players[index];
+                        let box = document.getElementById("player"+index);
+                        box.classList.add("fade-out");
+                        setTimeout(()=>{{ box.remove() }}, 700);
+                    }}, stopTime*1000);
+                }}
+            }}
+        }}
+    }});
+}}
+
+document.getElementById("play-all").addEventListener("click", async ()=>{
+    const boxes = document.querySelectorAll(".video-box");
+    for(let i=0;i<boxes.length;i++){{
+        let vid = boxes[i].dataset.video;
+        loadVideo(i, vid);
+        let delay = Math.floor(Math.random()*(5000-2000+1))+2000;
+        await new Promise(r=>setTimeout(r, delay));
+    }}
+});
+</script>
+"""
+
+# --- Embed HTML in Streamlit ---
+st.components.v1.html(html, height=1000, scrolling=True)
