@@ -74,7 +74,7 @@ function loadVideo(index, video) {{
     players[index] = new YT.Player("player"+index,{{
         videoId: video,
         playerVars: {{
-            autoplay:1,
+            autoplay:0,
             playsinline:1,
             rel:0,
             modestbranding:1,
