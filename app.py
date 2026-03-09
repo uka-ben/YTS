@@ -2,9 +2,9 @@ import streamlit as st
 
 st.set_page_config(page_title="YouTube Video Grid", layout="wide")
 
-# --- Video IDs ---
+# --- Video IDs (replace with multiple if needed) ---
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id]*20  # repeat the same video, can replace with multiple IDs
+video_ids = [video_id]*20  # repeat the same video for demonstration
 
 # --- Generate video blocks ---
 blocks = []
@@ -18,7 +18,7 @@ for i, vid in enumerate(video_ids):
     </div>
     """)
 
-# --- Full HTML + JS ---
+# --- HTML + JS ---
 html = f"""
 <div style="margin-bottom:10px;">
 <button id="play-all" style="padding:10px 20px;font-size:16px;cursor:pointer;">
@@ -57,11 +57,11 @@ function randomStopTime() {{
 }}
 
 function onYouTubeIframeAPIReady() {{
-    document.querySelectorAll(".video-box").forEach(box=>{
+    document.querySelectorAll(".video-box").forEach(box=>{{
         let vid = box.dataset.video;
         let idx = box.dataset.index;
         box.addEventListener("click",()=>loadVideo(idx,vid));
-    });
+    }});
 }}
 
 function loadVideo(index, video) {{
@@ -84,7 +84,7 @@ function loadVideo(index, video) {{
                 if(e.data === YT.PlayerState.PLAYING){{
                     clearTimeout(timers[index]);
                     let stopTime = randomStopTime();
-                    timers[index] = setTimeout(()=>{
+                    timers[index] = setTimeout(()=>{{
                         players[index].stopVideo();
                         players[index].destroy();
                         delete players[index];
@@ -98,17 +98,17 @@ function loadVideo(index, video) {{
     }});
 }}
 
-document.getElementById("play-all").addEventListener("click", async ()=>{
+document.getElementById("play-all").addEventListener("click", async ()=>{{
     const boxes = document.querySelectorAll(".video-box");
-    for(let i=0;i<boxes.length;i++){{
+    for(let i=0;i<boxes.length;i++){{ 
         let vid = boxes[i].dataset.video;
         loadVideo(i, vid);
         let delay = Math.floor(Math.random()*(5000-2000+1))+2000;
         await new Promise(r=>setTimeout(r, delay));
     }}
-});
+}});
 </script>
 """
 
 # --- Embed HTML in Streamlit ---
-st.components.v1.html(html, height=1000, scrolling=True)
+st.components.v1.html(html, height=1200, scrolling=True)
