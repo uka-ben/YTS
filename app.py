@@ -2,28 +2,25 @@ import streamlit as st
 
 st.set_page_config(page_title="Compact YouTube Grid", layout="wide")
 
-# Video
 video_id = "JZYnS6ypa2g"
-
-# Number of grid videos
 video_ids = [video_id]*100
 
 blocks = []
 
 for i, vid in enumerate(video_ids):
-    blocks.append(f"""
-    <div class="video-box" id="player{i}" data-video="{vid}" data-index="{i}">
-        <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp" loading="lazy">
+    blocks.append("""
+    <div class="video-box" id="player{0}" data-video="{1}" data-index="{0}">
+        <img src="https://i.ytimg.com/vi_webp/{1}/mqdefault.webp" loading="lazy">
     </div>
-    """)
+    """.format(i, vid))
 
-html = f"""
+html = """
 <div style="margin-bottom:6px;">
 <button id="play-all">Play All Sequentially</button>
 </div>
 
 <div id="video-grid">
-{''.join(blocks)}
+{blocks}
 </div>
 
 <style>
@@ -68,32 +65,32 @@ transition:opacity 0.5s;
 
 <script>
 
-let players = {{}}
-let timers = {{}}
+let players={{}};
+let timers={{}};
 
 function randomStopTime(){{
-return Math.floor(Math.random()*(45-35+1))+35
+return Math.floor(Math.random()*(45-35+1))+35;
 }}
 
 function onYouTubeIframeAPIReady(){{
 document.querySelectorAll(".video-box").forEach(box=>{{
 
-let vid = box.dataset.video
-let idx = box.dataset.index
+let vid=box.dataset.video;
+let idx=box.dataset.index;
 
-box.addEventListener("click",()=>loadVideo(idx,vid))
+box.addEventListener("click",()=>loadVideo(idx,vid));
 
-}})
+}});
 }}
 
 function loadVideo(index,video){{
 
 if(players[index]){{
-players[index].playVideo()
-return
+players[index].playVideo();
+return;
 }}
 
-players[index] = new YT.Player("player"+index,{{
+players[index]=new YT.Player("player"+index,{{
 
 width:"100%",
 height:"100%",
@@ -101,75 +98,70 @@ height:"100%",
 videoId:video,
 
 playerVars:{{
-
 autoplay:0,
 playsinline:1,
 rel:0,
 vq:"tiny",
 controls:1
-
 }},
 
 events:{{
 
 'onReady':function(e){{
-
-e.target.playVideo()
-
+e.target.playVideo();
 }},
 
 'onStateChange':function(e){{
 
 if(e.data===YT.PlayerState.PLAYING){{
 
-clearTimeout(timers[index])
+clearTimeout(timers[index]);
 
-let stop=randomStopTime()
+let stop=randomStopTime();
 
 timers[index]=setTimeout(()=>{{
 
-players[index].stopVideo()
-players[index].destroy()
+players[index].stopVideo();
+players[index].destroy();
+delete players[index];
 
-delete players[index]
+let box=document.getElementById("player"+index);
 
-let box=document.getElementById("player"+index)
+box.classList.add("fade-out");
 
-box.classList.add("fade-out")
+setTimeout(()=>{{box.remove()}},500);
 
-setTimeout(()=>{{box.remove()}},500)
-
-}},stop*1000)
-
-}}
+}},stop*1000);
 
 }}
 
 }}
 
-})
+}}
+
+}});
 
 }}
 
 document.getElementById("play-all").addEventListener("click",async()=>{{
 
-const boxes=document.querySelectorAll(".video-box")
+const boxes=document.querySelectorAll(".video-box");
 
 for(let i=0;i<boxes.length;i++){{
 
-let vid=boxes[i].dataset.video
+let vid=boxes[i].dataset.video;
 
-loadVideo(i,vid)
+loadVideo(i,vid);
 
-let delay=Math.floor(Math.random()*(5000-2000+1))+2000
+let delay=Math.floor(Math.random()*(5000-2000+1))+2000;
 
-await new Promise(r=>setTimeout(r,delay))
+await new Promise(r=>setTimeout(r,delay));
 
 }}
 
-}})
+}});
 
 </script>
-"""
+""".format(blocks="".join(blocks))
 
 st.components.v1.html(html, height=900, scrolling=True)
