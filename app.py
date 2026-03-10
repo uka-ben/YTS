@@ -105,4 +105,4 @@ document.getElementById("load-all").addEventListener("click", async ()=>{
 </script>
 '''
 
-displayHTML(html)
+displayHTML(html) 
