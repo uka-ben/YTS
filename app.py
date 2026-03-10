@@ -1,127 +1,139 @@
 import streamlit as st
-import random
 
-st.set_page_config(page_title="YouTube Grid - Random Features", layout="wide")
+st.set_page_config(page_title="Compact YouTube Grid", layout="wide")
 
-# Video list
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id]*20  # repeat 20 times; can increase
+video_ids = [video_id]*100
 
-# Generate HTML blocks for grid
 blocks = []
-for idx, vid in enumerate(video_ids):
-    blocks.append(f"""
-    <div class="video-box" id="player{idx}" data-video="{vid}" data-index="{idx}">
-        <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp" loading="lazy">
-    </div>
-    """)
 
-html = f"""
+for i, vid in enumerate(video_ids):
+    blocks.append("""
+    <div class="video-box" id="player{0}" data-video="{1}" data-index="{0}">
+        <img src="https://i.ytimg.com/vi_webp/{1}/mqdefault.webp" loading="lazy">
+    </div>
+    """.format(i, vid))
+
+html = """
 <div style="margin-bottom:6px;">
-<button id="load-all">Load All Sequentially</button>
+<button id="load-all">Load All Videos (Random Countdown Enabled)</button>
 </div>
 
 <div id="video-grid">
-{''.join(blocks)}
+{blocks}
 </div>
 
 <style>
+
 #video-grid {{
-  background:#000;
-  padding:6px;
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(60px,1fr));
-  gap:4px;
-  max-height:90vh;
-  overflow-y:auto;
+background:#000;
+padding:6px;
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(60px,1fr));
+gap:4px;
+max-height:90vh;
+overflow-y:auto;
 }}
 
 .video-box {{
-  width:100%;
-  aspect-ratio:16/9;
-  cursor:pointer;
-  position:relative;
+width:100%;
+aspect-ratio:16/9;
+cursor:pointer;
 }}
 
 .video-box img {{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  border-radius:2px;
+width:100%;
+height:100%;
+object-fit:cover;
+border-radius:2px;
 }}
 
-.loaded {{
-  opacity:0.6;  /* visual indicator when loaded */
-  transition: opacity 0.3s;
+.video-box iframe {{
+width:100% !important;
+height:100% !important;
+border:0;
 }}
 
 .fade-out {{
-  opacity:0;
-  transition: opacity 0.5s;
+opacity:0;
+transition:opacity 0.5s;
 }}
+
 </style>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
+
 let players = {{}};
 let timers = {{}};
 
+// Generate random stop time for each video
 function randomStopTime(){{
-    return Math.floor(Math.random()*(45-35+1))+35; // 35–45 seconds
+    return Math.floor(Math.random()*(45-35+1))+35;
 }}
 
-// Add click to manually play video
+// Load players on click of each box
 function onYouTubeIframeAPIReady(){{
-    document.querySelectorAll(".video-box").forEach(box => {{
+    document.querySelectorAll(".video-box").forEach(box=>{{
         let vid = box.dataset.video;
         let idx = box.dataset.index;
-        box.addEventListener("click", () => {{
-            if(players[idx]) return;
 
-            players[idx] = new YT.Player("player"+idx, {{
-                width:"100%",
-                height:"100%",
-                videoId:vid,
-                playerVars:{{
-                    autoplay:0,  // NO autoplay
-                    playsinline:1,
-                    rel:0,
-                    vq:"tiny",
-                    controls:1
-                }},
-                events:{{
-                    'onStateChange': function(e){{
-                        if(e.data === YT.PlayerState.PLAYING){{
-                            clearTimeout(timers[idx]);
-                            let stop = randomStopTime();
-                            timers[idx] = setTimeout(()=>{{
-                                players[idx].stopVideo();
-                                players[idx].destroy();
-                                delete players[idx];
-                                let boxEl = document.getElementById("player"+idx);
-                                boxEl.classList.add("fade-out");
-                                setTimeout(()=>{{ boxEl.remove() }},500);
-                            }}, stop*1000);
-                        }}
-                    }}
-                }}
-            }});
-        }});
+        box.addEventListener("click", ()=>loadVideo(idx, vid));
     }});
 }}
 
-// "Load All" button: random order + random delay
-document.getElementById("load-all").addEventListener("click", async () => {{
-    let boxes = Array.from(document.querySelectorAll(".video-box"));
-    while(boxes.length > 0){{
-        let idx = Math.floor(Math.random()*boxes.length); // pick random box
-        boxes[idx].classList.add("loaded");  // mark loaded
-        boxes.splice(idx,1);
-        await new Promise(r => setTimeout(r, Math.floor(Math.random()*(500-200+1))+200)); // random delay 200–500ms
+// Load video iframe but do NOT play
+function loadVideo(index, video){{
+
+    if(players[index]) {{
+        // already loaded, do nothing
+        return;
+    }}
+
+    players[index] = new YT.Player("player"+index,{{
+        width:"100%",
+        height:"100%",
+        videoId:video,
+        playerVars:{{
+            autoplay:0,
+            playsinline:1,
+            rel:0,
+            vq:"tiny",
+            controls:1
+        }},
+        events:{{
+            'onStateChange': function(e){{
+                if(e.data === YT.PlayerState.PLAYING){{
+                    // Start random stop timer only AFTER user manually plays
+                    clearTimeout(timers[index]);
+                    let stop = randomStopTime();
+                    timers[index] = setTimeout(()=>{{
+                        players[index].stopVideo();
+                        players[index].destroy();
+                        delete players[index];
+
+                        let box = document.getElementById("player"+index);
+                        box.classList.add("fade-out");
+                        setTimeout(()=>{{box.remove()}},500);
+
+                    }}, stop*1000);
+                }}
+            }}
+        }}
+    }});
+}}
+
+// "Load All" button — only loads players, does NOT autoplay
+document.getElementById("load-all").addEventListener("click", ()=>{{
+    const boxes = document.querySelectorAll(".video-box");
+    for(let i=0;i<boxes.length;i++) {{
+        let vid = boxes[i].dataset.video;
+        loadVideo(i, vid);
     }}
 }});
+
 </script>
-"""
+""".format(blocks="".join(blocks))
 
 st.components.v1.html(html, height=900, scrolling=True)
