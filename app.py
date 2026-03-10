@@ -2,6 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
+# 50 repeated videos
 video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 50
 
@@ -16,10 +17,10 @@ for idx, vid in enumerate(video_ids):
 </div>
 ''')
 
-# Join blocks first
+# Join all video blocks
 videos_html = "".join(html_blocks)
 
-# Full HTML (no f-string inside JS braces!)
+# Full HTML/JS
 html = """
 <div style="margin-bottom:10px;">
     <button id="load-all" style="padding:6px 12px;font-size:12px;cursor:pointer;">
@@ -38,6 +39,7 @@ html = """
 <script>
 let YT_API_ready = false;
 
+// Wait for API ready
 function onYouTubeIframeAPIReady() {{
     YT_API_ready = true;
 }}
@@ -82,22 +84,36 @@ function loadVideo(box) {{
     }});
 }}
 
+// Click handler for each video
 document.querySelectorAll(".video-box").forEach(box => {{
     box.addEventListener("click", () => loadVideo(box));
 }});
 
+// "Load All" button: shuffle and load all
 document.getElementById("load-all").addEventListener("click", async () => {{
+    // Wait for YT API
+    while(!YT_API_ready) {{
+        await new Promise(r => setTimeout(r, 100));
+    }}
+
     let boxes = Array.from(document.querySelectorAll(".video-box"));
+
+    // Fisher-Yates shuffle
     for (let i = boxes.length - 1; i > 0; i--) {{
         const j = Math.floor(Math.random() * (i + 1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }}
+
+    // Load each video in shuffled order
     for(let i=0; i<boxes.length; i++) {{
-        loadVideo(boxes[i]);
-        await new Promise(r => setTimeout(r, Math.floor(Math.random()*(5000-2000+1))+2000));
+        if(!boxes[i].classList.contains("loaded")) {{
+            loadVideo(boxes[i]);
+            await new Promise(r => setTimeout(r, Math.floor(Math.random()*(5000-2000+1))+2000));
+        }}
     }}
 }});
 </script>
 """
 
+# Display HTML in Streamlit
 st.components.v1.html(html, height=900, scrolling=True)
