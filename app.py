@@ -136,4 +136,4 @@ document.getElementById("load-all").addEventListener("click", ()=>{{
 </script>
 """.format(blocks="".join(blocks))
 
-st.components.v1.html(html, height=900, scrolling=True)
+st.components.v1.html(html, height=900, scrolling=True) 
