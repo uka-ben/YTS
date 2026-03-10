@@ -1,47 +1,45 @@
 import streamlit as st
 
-st.set_page_config(layout="wide")
-
 # Video repeated 20 times
 video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
-# Generate HTML per video
+# Generate HTML for each video (small grid)
 html_blocks = []
 for idx, vid in enumerate(video_ids):
     html_blocks.append(f'''
-<div class="video-box" data-video="{vid}" data-index="{idx}" style="cursor:pointer;margin:5px;position:relative;transition:opacity 1s;">
+<div class="video-box" data-video="{vid}" data-index="{idx}" 
+     style="cursor:pointer;margin:2px;position:relative;transition:opacity 1s; width:120px;">
     <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
          loading="lazy"
-         style="width:100%;aspect-ratio:16/9;border-radius:6px;">
+         style="width:100%;aspect-ratio:16/9;border-radius:4px;">
 </div>
 ''')
 
+# Combine HTML with Load All button
 html = f'''
-<div style="margin-bottom:10px;">
-    <button id="load-all" style="padding:10px 20px;font-size:16px;cursor:pointer;">
-        Shuffle Video Order
+<div style="margin-bottom:8px;">
+    <button id="load-all" style="padding:6px 12px;font-size:12px;cursor:pointer;">
+        Load All Sequentially
     </button>
 </div>
 
-<div id="video-grid" style="background:#000;padding:20px;
-     display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-     gap:10px;">
+<div id="video-grid" style="background:#000;padding:8px;
+     display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+     gap:4px;">
     {"".join(html_blocks)}
 </div>
 
+<!-- YouTube IFrame API -->
 <script src="https://www.youtube.com/iframe_api"></script>
-
 <script>
-
 let YT_API_ready = false;
 
-function onYouTubeIframeAPIReady() {{
+function onYouTubeIframeAPIReady() {
     YT_API_ready = true;
-}}
+}
 
-function loadVideo(box) {{
-
+function loadVideo(box) {
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
     const vid = box.getAttribute("data-video");
@@ -53,76 +51,49 @@ function loadVideo(box) {{
     const playerDiv = document.createElement("div");
     box.appendChild(playerDiv);
 
-    const player = new YT.Player(playerDiv, {{
+    const player = new YT.Player(playerDiv, {
+        height: '100%',
+        width: '100%',
+        videoId: vid,
+        playerVars: {
+            autoplay: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            vq: 'tiny'
+        },
+        events: {
+            onReady: (event) => {
+                event.target.addEventListener('onStateChange', function(e) {
+                    if(e.data == YT.PlayerState.PLAYING) {
+                        setTimeout(() => {
+                            event.target.stopVideo();
+                            box.style.opacity = 0;
+                            setTimeout(() => box.remove(), 1000);
+                        }, maxDuration * 1000);
+                    }
+                });
+            }
+        }
+    });
+}
 
-        height:'100%',
-        width:'100%',
-        videoId:vid,
+// Click handler for individual boxes
+document.querySelectorAll(".video-box").forEach(box => {
+    box.addEventListener("click", () => loadVideo(box));
+});
 
-        playerVars:{{
-            autoplay:0,
-            controls:1,
-            rel:0,
-            modestbranding:1,
-            playsinline:1,
-            vq:'tiny'
-        }},
-
-        events:{{
-
-            onReady:(event)=>{{
-
-                event.target.addEventListener('onStateChange',function(e){{
-
-                    if(e.data==YT.PlayerState.PLAYING){{
-
-                        setTimeout(()=>{{
-
-                            event.target.stopVideo()
-
-                            box.style.opacity=0
-
-                            setTimeout(()=>box.remove(),1000)
-
-                        }},maxDuration*1000)
-
-                    }}
-
-                }})
-
-            }}
-
-        }}
-
-    }})
-
-}}
-
-document.querySelectorAll(".video-box").forEach(box=>{{
-
-    box.addEventListener("click",()=>loadVideo(box))
-
-}})
-
-document.getElementById("load-all").addEventListener("click",()=>{{
-
-    let grid=document.getElementById("video-grid")
-
-    let boxes=Array.from(grid.children)
-
-    for(let i=boxes.length-1;i>0;i--){{
-
-        const j=Math.floor(Math.random()*(i+1))
-
-        ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
-
-    }}
-
-    boxes.forEach(box=>grid.appendChild(box))
-
-}})
-
+// Load All button: sequential load with 0–500ms random delay
+document.getElementById("load-all").addEventListener("click", async () => {
+    const boxes = Array.from(document.querySelectorAll(".video-box"));
+    for(let i = 0; i < boxes.length; i++) {
+        loadVideo(boxes[i]);
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 500)));
+    }
+});
 </script>
 '''
 
-st.components.v1.html(html, height=900, scrolling=True)
+# Display in Streamlit
+st.components.v1.html(html, height=600, scrolling=True)
