@@ -1,3 +1,7 @@
+import streamlit as st
+
+st.set_page_config(layout="wide")
+
 # Video repeated 50 times
 video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 50
@@ -13,7 +17,6 @@ for idx, vid in enumerate(video_ids):
 </div>
 ''')
 
-# Combine HTML with shuffle button
 html = f'''
 <div style="margin-bottom:5px;">
     <button id="load-all" style="padding:6px 12px;font-size:12px;cursor:pointer;">
@@ -33,12 +36,12 @@ html = f'''
 let YT_API_ready = false;
 
 // Wait for API ready
-function onYouTubeIframeAPIReady() {
+function onYouTubeIframeAPIReady() {{
     YT_API_ready = true;
-}
+}}
 
 // Load video on click, with max duration and fade-out
-function loadVideo(box) {
+function loadVideo(box) {{
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
     const vid = box.getAttribute("data-video");
@@ -48,61 +51,59 @@ function loadVideo(box) {
     box.innerHTML = '';
     box.classList.add("loaded");
 
-    // Create YouTube player
     const playerDiv = document.createElement("div");
     box.appendChild(playerDiv);
 
-    const player = new YT.Player(playerDiv, {
+    const player = new YT.Player(playerDiv, {{
         height:'100%',
         width:'100%',
         videoId:vid,
-        playerVars:{
+        playerVars:{{
             autoplay:0,
             controls:1,
             rel:0,
             modestbranding:1,
             playsinline:1,
             vq:'tiny'
-        },
-        events:{
-            onReady:(event)=>{
-                event.target.addEventListener('onStateChange', function(e){
-                    if(e.data==YT.PlayerState.PLAYING){
-                        setTimeout(()=>{
+        }},
+        events:{{
+            onReady:(event)=>{{
+                event.target.addEventListener('onStateChange', function(e){{
+                    if(e.data==YT.PlayerState.PLAYING){{
+                        setTimeout(()=>{{
                             event.target.stopVideo();
                             box.style.opacity=0;
                             setTimeout(()=>box.remove(),1000);
-                        }, maxDuration*1000)
-                    }
-                });
-            }
-        }
-    });
-}
+                        }}, maxDuration*1000)
+                    }}
+                }});
+            }}
+        }}
+    }});
+}}
 
 // Click handler for each video
-document.querySelectorAll(".video-box").forEach(box=>{
+document.querySelectorAll(".video-box").forEach(box=>{{
     box.addEventListener("click", ()=>loadVideo(box));
-});
+}});
 
 // "Load All" button: loads shuffled video boxes only
-document.getElementById("load-all").addEventListener("click", async ()=>{
+document.getElementById("load-all").addEventListener("click", async ()=>{{
     let boxes = Array.from(document.querySelectorAll(".video-box"));
 
     // Fisher-Yates shuffle
-    for(let i=boxes.length-1;i>0;i--){
+    for(let i=boxes.length-1;i>0;i--){{
         const j=Math.floor(Math.random()*(i+1));
         [boxes[i], boxes[j]]=[boxes[j], boxes[i]];
-    }
+    }}
 
     // Load each video box (creates players, click-to-play)
-    for(let i=0;i<boxes.length;i++){
+    for(let i=0;i<boxes.length;i++){{
         loadVideo(boxes[i]);
-        // Random delay 1–2 sec between loads (faster for 50 videos)
         await new Promise(r=>setTimeout(r, Math.floor(Math.random()*(2000-1000+1))+1000));
-    }
-});
+    }}
+}});
 </script>
 '''
 
-displayHTML(html) 
+st.components.v1.html(html, height=900, scrolling=True)
