@@ -1,4 +1,26 @@
-html = f'''
+import streamlit as st
+
+st.set_page_config(layout="wide")
+
+video_id = "JZYnS6ypa2g"
+video_ids = [video_id] * 50
+
+# Generate HTML blocks
+html_blocks = []
+for idx, vid in enumerate(video_ids):
+    html_blocks.append(f'''
+<div class="video-box" data-video="{vid}" data-index="{idx}" style="cursor:pointer;margin:2px;position:relative;transition:opacity 0.5s;">
+    <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
+         loading="lazy"
+         style="width:100%;aspect-ratio:16/9;border-radius:3px;">
+</div>
+''')
+
+# Join blocks first
+videos_html = "".join(html_blocks)
+
+# Full HTML (no f-string inside JS braces!)
+html = """
 <div style="margin-bottom:10px;">
     <button id="load-all" style="padding:6px 12px;font-size:12px;cursor:pointer;">
         Load All Videos (Random Order)
@@ -9,11 +31,10 @@ html = f'''
      display:grid;
      grid-template-columns:repeat(auto-fit,minmax(100px,1fr));
      gap:4px;">
-    {"".join(html_blocks)}
+""" + videos_html + """
 </div>
 
 <script src="https://www.youtube.com/iframe_api"></script>
-
 <script>
 let YT_API_ready = false;
 
@@ -77,4 +98,6 @@ document.getElementById("load-all").addEventListener("click", async () => {{
     }}
 }});
 </script>
-'''
+"""
+
+st.components.v1.html(html, height=900, scrolling=True)
