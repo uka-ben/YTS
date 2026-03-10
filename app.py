@@ -1,39 +1,40 @@
-import streamlit as st
-
-st.set_page_config(layout="wide")
-
-# Video repeated 20 times
+# Video repeated 50 times
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id] * 20
+video_ids = [video_id] * 50
 
 # Generate HTML per video
 html_blocks = []
 for idx, vid in enumerate(video_ids):
     html_blocks.append(f'''
-<div class="video-box" data-video="{vid}" data-index="{idx}" style="cursor:pointer;margin:5px;position:relative;transition:opacity 1s;">
+<div class="video-box" data-video="{vid}" data-index="{idx}" style="cursor:pointer;margin:2px;position:relative;transition:opacity 1s;">
     <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
          loading="lazy"
-         style="width:100%;aspect-ratio:16/9;border-radius:6px;">
+         style="width:100%;aspect-ratio:16/9;border-radius:4px;">
 </div>
 ''')
 
+# Combine HTML
 html = f'''
-<div style="margin-bottom:10px;">
-    <button id="load-all" style="padding:10px 20px;font-size:16px;cursor:pointer;">
-        Shuffle Video Order
+<div style="margin-bottom:8px;">
+    <button id="load-all" style="padding:6px 14px;font-size:13px;cursor:pointer;">
+        Load All Videos (Random Order)
     </button>
 </div>
 
-<div id="video-grid" style="background:#000;padding:20px;
-     display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-     gap:10px;">
+<div id="video-grid" style="
+     background:#000;
+     padding:10px;
+     display:grid;
+     grid-template-columns:repeat(auto-fit,minmax(90px,1fr));
+     gap:4px;
+">
     {"".join(html_blocks)}
 </div>
 
+<!-- Load YouTube IFrame API -->
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
-
 let YT_API_ready = false;
 
 function onYouTubeIframeAPIReady() {{
@@ -47,13 +48,13 @@ function loadVideo(box) {{
     const vid = box.getAttribute("data-video");
     const maxDuration = Math.floor(Math.random() * (46 - 35 + 1)) + 35;
 
-    box.innerHTML = '';
+    box.innerHTML='';
     box.classList.add("loaded");
 
-    const playerDiv = document.createElement("div");
+    const playerDiv=document.createElement("div");
     box.appendChild(playerDiv);
 
-    const player = new YT.Player(playerDiv, {{
+    const player=new YT.Player(playerDiv,{{
 
         height:'100%',
         width:'100%',
@@ -99,30 +100,30 @@ function loadVideo(box) {{
 }}
 
 document.querySelectorAll(".video-box").forEach(box=>{{
-
     box.addEventListener("click",()=>loadVideo(box))
-
 }})
 
-document.getElementById("load-all").addEventListener("click",()=>{{
+document.getElementById("load-all").addEventListener("click",async()=>{{
 
-    let grid=document.getElementById("video-grid")
-
-    let boxes=Array.from(grid.children)
+    let boxes=Array.from(document.querySelectorAll(".video-box"))
 
     for(let i=boxes.length-1;i>0;i--){{
 
         const j=Math.floor(Math.random()*(i+1))
-
         ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
 
     }}
 
-    boxes.forEach(box=>grid.appendChild(box))
+    for(let i=0;i<boxes.length;i++){{
+
+        loadVideo(boxes[i])
+
+        await new Promise(r=>setTimeout(r,Math.floor(Math.random()*(5000-2000+1))+2000))
+
+    }}
 
 }})
-
 </script>
 '''
 
-st.components.v1.html(html, height=900, scrolling=True)
+displayHTML(html)
