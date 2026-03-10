@@ -17,10 +17,8 @@ for idx, vid in enumerate(video_ids):
 </div>
 ''')
 
-# Join all video blocks
 videos_html = "".join(html_blocks)
 
-# Full HTML/JS
 html = """
 <div style="margin-bottom:10px;">
     <button id="load-all" style="padding:6px 12px;font-size:12px;cursor:pointer;">
@@ -40,11 +38,12 @@ html = """
 let YT_API_ready = false;
 
 // Wait for API ready
-function onYouTubeIframeAPIReady() {{
+function onYouTubeIframeAPIReady() {
     YT_API_ready = true;
-}}
+}
 
-function loadVideo(box) {{
+// Load video box (click-to-play)
+function loadVideo(box) {
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
     const vid = box.getAttribute("data-video");
@@ -56,64 +55,65 @@ function loadVideo(box) {{
     const playerDiv = document.createElement("div");
     box.appendChild(playerDiv);
 
-    const player = new YT.Player(playerDiv, {{
+    // Create YouTube Player
+    const player = new YT.Player(playerDiv, {
         height: '100%',
         width: '100%',
         videoId: vid,
-        playerVars: {{
-            autoplay:0,
-            controls:1,
-            rel:0,
-            modestbranding:1,
-            playsinline:1,
-            vq:'tiny'
-        }},
-        events: {{
-            onReady: (event) => {{
-                event.target.addEventListener('onStateChange', function(e) {{
-                    if(e.data == YT.PlayerState.PLAYING) {{
-                        setTimeout(() => {{
-                            event.target.stopVideo();
-                            box.style.opacity = 0;
-                            setTimeout(() => box.remove(), 1000);
-                        }}, maxDuration * 1000);
-                    }}
-                }});
-            }}
-        }}
-    }});
-}}
+        playerVars: {
+            autoplay: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            vq: 'tiny'
+        },
+        events: {
+            onReady: function(event) {
+                // Nothing automatically plays; user clicks manually
+            },
+            onStateChange: function(event) {
+                if(event.data == YT.PlayerState.PLAYING) {
+                    // Stop after maxDuration
+                    setTimeout(() => {
+                        event.target.stopVideo();
+                        box.style.opacity = 0;
+                        setTimeout(() => box.remove(), 1000);
+                    }, maxDuration * 1000);
+                }
+            }
+        }
+    });
+}
 
-// Click handler for each video
-document.querySelectorAll(".video-box").forEach(box => {{
+// Click handler for individual videos
+document.querySelectorAll(".video-box").forEach(box => {
     box.addEventListener("click", () => loadVideo(box));
-}});
+});
 
-// "Load All" button: shuffle and load all
-document.getElementById("load-all").addEventListener("click", async () => {{
-    // Wait for YT API
-    while(!YT_API_ready) {{
+// "Load All" button: shuffle and create players (manual play)
+document.getElementById("load-all").addEventListener("click", async () => {
+    while(!YT_API_ready) {
         await new Promise(r => setTimeout(r, 100));
-    }}
+    }
 
     let boxes = Array.from(document.querySelectorAll(".video-box"));
 
-    // Fisher-Yates shuffle
-    for (let i = boxes.length - 1; i > 0; i--) {{
+    // Shuffle
+    for (let i = boxes.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
-    }}
+    }
 
-    // Load each video in shuffled order
-    for(let i=0; i<boxes.length; i++) {{
-        if(!boxes[i].classList.contains("loaded")) {{
+    // Load each video box
+    for(let i = 0; i < boxes.length; i++) {
+        if(!boxes[i].classList.contains("loaded")) {
             loadVideo(boxes[i]);
             await new Promise(r => setTimeout(r, Math.floor(Math.random()*(5000-2000+1))+2000));
-        }}
-    }}
-}});
+        }
+    }
+});
 </script>
 """
 
-# Display HTML in Streamlit
-st.components.v1.html(html, height=900, scrolling=True)
+st.components.v1.html(html, height=1000, scrolling=True)
