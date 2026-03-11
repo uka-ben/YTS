@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "x4QrH--RlQU"
+video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -73,21 +73,17 @@ if(box.classList.contains("loaded")) return
 const vid = box.dataset.video
 
 /* mixed start strategy */
-
 let start
-
 if(Math.random() < 0.7){{
-start = 0
+    start = 0
 }}else{{
-start = Math.floor(Math.random()*200)
+    start = Math.floor(Math.random()*200)
 }}
 
 const duration = Math.floor(Math.random()*(46-35+1))+35
-
 const end = start + duration
 
 const iframe = document.createElement("iframe")
-
 iframe.src =
 "https://www.youtube.com/embed/"+vid+
 "?autoplay=0"+
@@ -101,82 +97,57 @@ iframe.src =
 iframe.allow="autoplay"
 
 box.innerHTML=""
-
 box.appendChild(iframe)
 
 box.classList.add("loaded")
 
 /* detect play click */
-
 box.addEventListener("click",()=>{{
+    setTimeout(()=>{{
+        try {{
+            iframe.contentWindow.postMessage(JSON.stringify({{
+                event:'command',
+                func:'setPlaybackQuality',
+                args:['tiny']
+            }}),'*')
+        }} catch(e){{}}
+    }},1000)
 
-setTimeout(()=>{{
-
-try{{
-iframe.contentWindow.postMessage(JSON.stringify({{
-event:'command',
-func:'setPlaybackQuality',
-args:['tiny']
-}}),'*')
-}}catch(e){{}}
-
-}},1000)
-
-/* remove player after duration */
-
-setTimeout(()=>{{
-
-iframe.src=""
-
-box.style.opacity=0
-
-setTimeout(()=>box.remove(),1000)
-
-}}, duration*1000)
+    /* remove player after duration */
+    setTimeout(()=>{{
+        iframe.src=""
+        box.style.opacity=0
+        setTimeout(()=>box.remove(),1000)
+    }}, duration*1000)
 
 }},{{once:true}})
 
 }}
 
 document.querySelectorAll(".video-box").forEach(box=>{{
-
-box.addEventListener("click",()=>loadPlayer(box))
-
+    box.addEventListener("click",()=>loadPlayer(box))
 }})
 
 document.getElementById("shuffle-load").onclick=()=>{{
-
 let grid=document.getElementById("video-grid")
-
 let boxes=[...grid.children]
 
 /* shuffle grid */
-
-for(let i=boxes.length-1;i>0;i--){{
-let j=Math.floor(Math.random()*(i+1))
-;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
+for(let i=boxes.length-1;i>0;i--) {{
+    let j=Math.floor(Math.random()*(i+1))
+    ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
 }}
-
 boxes.forEach(b=>grid.appendChild(b))
 
-/* sequential loading */
-
+/* sequential loading with 1–5s random delay */
 let delay=0
-
 boxes.forEach(box=>{{
-
-let randomDelay=Math.random()*1000
-
-setTimeout(()=>{{
-
-loadPlayer(box)
-
-}},delay)
-
-delay+=randomDelay
-
+    let randomDelay = 1000 + Math.random()*4000  // 1–5 seconds
+    setTimeout(()=>{{
+        loadPlayer(box)
+    }}, delay)
+    delay += randomDelay
 }})
-
 }}
 
 </script>
