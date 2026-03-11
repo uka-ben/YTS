@@ -3,9 +3,9 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id] * 20  # 20 videos
+video_ids = [video_id] * 20
 
-# Create small thumbnail blocks (~50% smaller)
+# Smaller thumbnail blocks
 html_blocks = []
 for i, vid in enumerate(video_ids):
     html_blocks.append(f"""
@@ -22,7 +22,7 @@ html = """
     background:#000;
     padding:10px;
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
+    grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); /* half size */
     gap:4px;
 }
 .video-box {
@@ -43,12 +43,6 @@ button {
     cursor:pointer;
     margin-bottom:10px;
 }
-iframe {
-    width:100%;
-    height:100%;
-    border:none;
-    border-radius:4px;
-}
 </style>
 
 <button id="shuffle-load">Shuffle + Load Players</button>
@@ -67,87 +61,75 @@ function onYouTubeIframeAPIReady() {
     APIready = true;
 }
 
-// Watch timer function
-function startWatchTimer(player, box) {
-    let maxDuration = Math.floor(Math.random()*(46-35+1))+35;
-    let watchStart = Date.now();
-    let interval = setInterval(()=>{
-        if(player.getPlayerState() !== YT.PlayerState.PLAYING) return;
-        let watchedSec = (Date.now() - watchStart)/1000;
-        if(watchedSec >= maxDuration){
-            player.stopVideo();
-            box.style.opacity = 0;
-            setTimeout(()=>box.remove(),500);
-            clearInterval(interval);
-        }
-    },250);
-}
+function loadPlayer(box) {
+    if(box.classList.contains("loaded") || !APIready) return;
 
-// Load or play player on click
-function handleClick(box){
     const vid = box.dataset.video;
     const idx = box.dataset.index;
-    if(!APIready) return;
+    const targetWatch = Math.floor(Math.random()*(46-35+1))+35; // seconds
 
-    if(!box.classList.contains("loaded")){
-        // Create iframe on user click to satisfy mobile autoplay policies
-        box.innerHTML = '<div id="p'+idx+'"></div>';
-        box.classList.add("loaded");
+    box.innerHTML = '<div id="p'+idx+'"></div>';
+    box.classList.add("loaded");
 
-        players[idx] = new YT.Player('p'+idx, {
-            height:'100%',
-            width:'100%',
-            videoId: vid,
-            playerVars:{
-                autoplay:0,  // NO autoplay
-                controls:1,
-                rel:0,
-                modestbranding:1,
-                playsinline:1,
-                vq:'tiny'
-            },
-            events:{
-                onStateChange:function(e){
-                    if(e.data === YT.PlayerState.PLAYING){
-                        let player = players[idx];
-                        player.setPlaybackQuality('tiny'); // force 144p
-                        startWatchTimer(player, box);
-                    }
+    players[idx] = new YT.Player('p'+idx, {
+        height:'100%',
+        width:'100%',
+        videoId:vid,
+        playerVars:{
+            autoplay:0,
+            controls:1,
+            rel:0,
+            modestbranding:1,
+            playsinline:1,
+            vq:'tiny'
+        },
+        events:{
+            onStateChange:function(e){
+                if(e.data === YT.PlayerState.PLAYING){
+                    let player = players[idx];
+                    player.setPlaybackQuality('tiny');
+
+                    // Track real watched time
+                    let watchedSec = 0;
+                    const tracker = setInterval(()=>{
+                        if(player.getPlayerState() === YT.PlayerState.PLAYING){
+                            watchedSec += 0.5; // count every 500ms
+                        }
+                        if(watchedSec >= targetWatch){
+                            player.stopVideo();
+                            clearInterval(tracker);
+                            box.style.opacity = 0;
+                            setTimeout(()=>box.remove(),500);
+                        }
+                    },500);
                 }
             }
-        });
-    } else {
-        // Already loaded: just play on click
-        let player = players[idx];
-        if(player && player.playVideo) player.playVideo();
-    }
+        }
+    });
 }
 
-// Attach click to all boxes
+// Click to load a player
 document.querySelectorAll(".video-box").forEach(box=>{
-    box.addEventListener("click", ()=>handleClick(box));
+    box.addEventListener("click",()=>loadPlayer(box));
 });
 
-// Shuffle + preload lite players visually (no autoplay)
+// Shuffle + sequential load
 document.getElementById("shuffle-load").onclick = ()=>{
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
 
     // Shuffle
-    for(let i=boxes.length-1; i>0; i--){
+    for(let i=boxes.length-1;i>0;i--){
         let j = Math.floor(Math.random()*(i+1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }
     boxes.forEach(b => grid.appendChild(b));
 
-    // Sequential visual load with 0-1s random delay (thumbnails only)
+    // Sequential load 0–1s random delay
     let delay = 0;
     boxes.forEach(box=>{
-        let r = Math.random()*1000; // 0-1000ms
-        setTimeout(()=>{ 
-            // Only prepare boxes visually, DO NOT autoplay on mobile
-            // iframe creation will happen on user click
-        }, delay);
+        let r = Math.random()*1000;
+        setTimeout(()=>{ loadPlayer(box); }, delay);
         delay += r;
     });
 };
