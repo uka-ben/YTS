@@ -7,12 +7,12 @@ video_ids = [video_id] * 20
 
 html_blocks = []
 
-for vid in video_ids:
+for i, vid in enumerate(video_ids):
     html_blocks.append(f"""
-<div class="video-box" data-video="{vid}">
-    <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
-    loading="lazy"
-    class="thumb">
+<div class="video-box" data-video="{vid}" data-index="{i}">
+<img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
+loading="lazy"
+class="thumb">
 </div>
 """)
 
@@ -42,13 +42,6 @@ object-fit:cover;
 border-radius:6px;
 }}
 
-iframe {{
-width:100%;
-height:100%;
-border:none;
-border-radius:6px;
-}}
-
 button {{
 padding:10px 20px;
 font-size:16px;
@@ -64,27 +57,79 @@ margin-bottom:10px;
 {''.join(html_blocks)}
 </div>
 
+<script src="https://www.youtube.com/iframe_api"></script>
+
 <script>
+
+let players = {{}}
+let APIready = false
+
+function onYouTubeIframeAPIReady() {{
+APIready = true
+}}
 
 function loadPlayer(box){{
 
-if(box.classList.contains("loaded")) return
+if(box.classList.contains("loaded") || !APIready) return
 
 const vid = box.dataset.video
+const idx = box.dataset.index
+const maxDuration = Math.floor(Math.random()*(46-35+1))+35
 
-const iframe = document.createElement("iframe")
-
-iframe.src =
-"https://www.youtube.com/embed/"+vid+
-"?autoplay=0&controls=1&rel=0&modestbranding=1&vq=tiny"
-
-iframe.allow="autoplay"
-
-box.innerHTML=""
-
-box.appendChild(iframe)
-
+box.innerHTML = '<div id="p'+idx+'"></div>'
 box.classList.add("loaded")
+
+players[idx] = new YT.Player('p'+idx, {{
+
+height:'100%',
+width:'100%',
+videoId:vid,
+
+playerVars:{{
+autoplay:0,
+controls:1,
+rel:0,
+modestbranding:1,
+playsinline:1,
+vq:'tiny'
+}},
+
+events:{{
+
+onStateChange:function(e){{
+
+if(e.data === YT.PlayerState.PLAYING){{
+
+let player = players[idx]
+
+/* lock 144p */
+player.setPlaybackQuality('tiny')
+
+/* kill large DASH buffer */
+setTimeout(()=>{
+try {{
+let t = player.getCurrentTime()
+player.seekTo(t + 0.05, true)
+}} catch(e){{}}
+},1500)
+
+/* stop video after random duration */
+
+setTimeout(()=>{{
+player.stopVideo()
+
+box.style.opacity = 0
+setTimeout(()=>box.remove(),1000)
+
+}}, maxDuration * 1000)
+
+}}
+
+}}
+
+}}
+
+}})
 
 }}
 
@@ -97,31 +142,26 @@ box.addEventListener("click",()=>loadPlayer(box))
 document.getElementById("shuffle-load").onclick=()=>{{
 
 let grid=document.getElementById("video-grid")
-
 let boxes=[...grid.children]
 
-/* shuffle */
-
 for(let i=boxes.length-1;i>0;i--){{
+
 let j=Math.floor(Math.random()*(i+1))
 ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
+
 }}
 
 boxes.forEach(b=>grid.appendChild(b))
-
-/* sequential load */
 
 let delay=0
 
 boxes.forEach(box=>{{
 
-let randomDelay=Math.random()*1000
+let r=Math.random()*1000
 
-setTimeout(()=>{{
-loadPlayer(box)
-}},delay)
+setTimeout(()=>{{loadPlayer(box)}},delay)
 
-delay+=randomDelay
+delay+=r
 
 }})
 
