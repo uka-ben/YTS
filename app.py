@@ -3,9 +3,9 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id] * 20
+video_ids = [video_id] * 20  # 20 videos
 
-# Create small thumbnail blocks (~50% smaller)
+# Create small thumbnail blocks
 html_blocks = []
 for i, vid in enumerate(video_ids):
     html_blocks.append(f"""
@@ -67,67 +67,73 @@ function onYouTubeIframeAPIReady() {
     APIready = true;
 }
 
+// Load or play a player
 function loadPlayer(box){
-    if(box.classList.contains("loaded") || !APIready) return;
-
     const vid = box.dataset.video;
     const idx = box.dataset.index;
 
-    box.innerHTML = '<div id="p'+idx+'"></div>';
-    box.classList.add("loaded");
+    if(!APIready) return;
 
-    players[idx] = new YT.Player('p'+idx, {
-        height:'100%',
-        width:'100%',
-        videoId:vid,
-        playerVars:{
-            autoplay:0,
-            controls:1,
-            rel:0,
-            modestbranding:1,
-            playsinline:1,
-            vq:'tiny'
-        },
-        events:{
-            onStateChange:function(e){
-                if(e.data === YT.PlayerState.PLAYING){
-                    let player = players[idx];
+    if(!box.classList.contains("loaded")){
+        // Create the iframe player
+        box.innerHTML = '<div id="p'+idx+'"></div>';
+        box.classList.add("loaded");
 
-                    // Force 144p
-                    player.setPlaybackQuality('tiny');
+        players[idx] = new YT.Player('p'+idx, {
+            height:'100%',
+            width:'100%',
+            videoId: vid,
+            playerVars:{
+                autoplay:0,
+                controls:1,
+                rel:0,
+                modestbranding:1,
+                playsinline:1,
+                vq:'tiny'
+            },
+            events:{
+                onStateChange:function(e){
+                    if(e.data === YT.PlayerState.PLAYING){
+                        let player = players[idx];
 
-                    // Cancel big DASH buffer
-                    setTimeout(()=>{
-                        try {
-                            let t = player.getCurrentTime();
-                            player.seekTo(t + 0.05, true);
-                        } catch(e){}
-                    },1500);
+                        // Force 144p
+                        player.setPlaybackQuality('tiny');
 
-                    // Start counting actual watch time
-                    let maxDuration = Math.floor(Math.random()*(46-35+1))+35;
-                    let watchStart = Date.now();
-                    let interval = setInterval(()=>{
-                        if(player.getPlayerState() !== YT.PlayerState.PLAYING){
-                            return; // don't count paused/buffering
-                        }
-                        let watchedSec = (Date.now() - watchStart)/1000;
-                        if(watchedSec >= maxDuration){
-                            player.stopVideo();
-                            box.style.opacity = 0;
-                            setTimeout(()=>box.remove(),500);
-                            clearInterval(interval);
-                        }
-                    },250); // check every 250ms
+                        // Minimize DASH buffer to save data
+                        setTimeout(()=>{
+                            try {
+                                let t = player.getCurrentTime();
+                                player.seekTo(t + 0.05, true);
+                            } catch(e){}
+                        },1500);
+
+                        // Count actual watch time
+                        let maxDuration = Math.floor(Math.random()*(46-35+1))+35;
+                        let watchStart = Date.now();
+                        let interval = setInterval(()=>{
+                            if(player.getPlayerState() !== YT.PlayerState.PLAYING) return;
+                            let watchedSec = (Date.now() - watchStart)/1000;
+                            if(watchedSec >= maxDuration){
+                                player.stopVideo();
+                                box.style.opacity = 0;
+                                setTimeout(()=>box.remove(),500);
+                                clearInterval(interval);
+                            }
+                        },250);
+                    }
                 }
             }
-        }
-    });
+        });
+    } else {
+        // Already loaded, just play
+        let player = players[idx];
+        if(player && player.playVideo) player.playVideo();
+    }
 }
 
-// Click to load a player
+// Click to load or play
 document.querySelectorAll(".video-box").forEach(box=>{
-    box.addEventListener("click",()=>loadPlayer(box));
+    box.addEventListener("click", ()=>loadPlayer(box));
 });
 
 // Shuffle + sequential load with 0-1s random delay
@@ -142,7 +148,7 @@ document.getElementById("shuffle-load").onclick = ()=>{
     }
     boxes.forEach(b => grid.appendChild(b));
 
-    // Sequential load with random 0-1s delay
+    // Sequential load with 0-1s random delay
     let delay = 0;
     boxes.forEach(box=>{
         let r = Math.random()*1000; // 0-1000ms
