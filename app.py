@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "ZYcZ_nBLG6Y"
+video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -66,65 +66,139 @@ function onYouTubeIframeAPIReady() {{
     YT_API_ready = true;
 }}
 
+function getRandomStart() {{
+    const rand = Math.random();
+    
+    if (rand < 0.7) {{  // 70% start at beginning
+        return 0;
+    }} else if (rand < 0.85) {{  // 15% start early (10-30s)
+        return Math.floor(Math.random() * 20) + 10;  // 10-30 seconds
+    }} else {{  // 15% start mid-video (60-180s)
+        return Math.floor(Math.random() * 120) + 60;  // 60-180 seconds
+    }}
+}}
+
+function getRandomDuration() {{
+    return Math.floor(Math.random() * 21) + 36;  // 36-56 seconds
+}}
+
+function getRandomPause() {{
+    return Math.floor(Math.random() * 5) + 1;  // 1-5 seconds (reduced from 1-10)
+}}
+
 function loadPlayer(box) {{
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
-    const vid = box.dataset.video;
+    // 1️⃣ Random thinking delay before clicking play (0.5-3 seconds)
+    const thinkingDelay = Math.floor(Math.random() * 2500) + 500;
+    
+    setTimeout(() => {{
+        const vid = box.dataset.video;
 
-    // Mixed start strategy
-    let start;
-    if(Math.random() < 0.7){{
-        start = 0;
-    }} else {{
-        start = Math.floor(Math.random() * 200);
-    }}
+        // 2️⃣ More natural start distribution
+        let start = getRandomStart();
 
-    const duration = Math.floor(Math.random()*(46-35+1)) + 35;
-    const end = start + duration;
+        // 3️⃣ Slight variation in watch duration
+        const duration = getRandomDuration();
+        const end = start + duration;
 
-    box.innerHTML = '';
-    box.classList.add("loaded");
+        box.innerHTML = '';
+        box.classList.add("loaded");
 
-    const playerDiv = document.createElement("div");
-    box.appendChild(playerDiv);
+        const playerDiv = document.createElement("div");
+        box.appendChild(playerDiv);
 
-    const player = new YT.Player(playerDiv, {{
-        height: '100%',
-        width: '100%',
-        videoId: vid,
-        playerVars: {{
-            autoplay: 0,
-            controls: 1,
-            rel: 0,
-            modestbranding: 1,
-            playsinline: 1,
-            start: start,
-            end: end,
-            vq: 'tiny'
-        }},
-        events: {{
-            onReady: (event) => {{
-                event.target.addEventListener('onStateChange', function(e) {{
-                    if(e.data == YT.PlayerState.PLAYING) {{
-                        // Continuously force 144p every second
-                        let qualityInterval = setInterval(() => {{
-                            try {{
-                                event.target.setPlaybackQuality('tiny');
-                            }} catch(e){{}}
-                        }}, 1000);
+        const player = new YT.Player(playerDiv, {{
+            height: '100%',
+            width: '100%',
+            videoId: vid,
+            playerVars: {{
+                autoplay: 0,
+                controls: 1,
+                rel: 0,
+                modestbranding: 1,
+                playsinline: 1,
+                start: start,
+                end: end,
+                vq: 'tiny'
+            }},
+            events: {{
+                onReady: (event) => {{
+                    event.target.addEventListener('onStateChange', function(e) {{
+                        if(e.data == YT.PlayerState.PLAYING) {{
+                            // Continuously force 144p every second
+                            let qualityInterval = setInterval(() => {{
+                                try {{
+                                    event.target.setPlaybackQuality('tiny');
+                                }} catch(e){{}}
+                            }}, 1000);
 
-                        // Stop video and destroy after duration
-                        setTimeout(() => {{
-                            event.target.stopVideo();
-                            clearInterval(qualityInterval);
-                            box.style.opacity = 0;
-                            setTimeout(() => box.remove(), 1000);
-                        }}, duration * 1000);
-                    }}
-                }});
+                            // 5️⃣ Random short pauses during play (max 3 pauses)
+                            let remainingTime = duration;
+                            let pauseCount = 0;
+                            const MAX_PAUSES = 3;  // Maximum 3 pauses per video
+                            
+                            const scheduleNextPause = () => {{
+                                if (remainingTime <= 0 || pauseCount >= MAX_PAUSES) {{
+                                    // Finish video if no time left or max pauses reached
+                                    if (remainingTime > 0) {{
+                                        setTimeout(() => {{
+                                            event.target.stopVideo();
+                                            clearInterval(qualityInterval);
+                                            box.style.opacity = 0;
+                                            setTimeout(() => box.remove(), 1000);
+                                        }}, remainingTime * 1000);
+                                    }}
+                                    return;
+                                }}
+                                
+                                // Don't schedule pauses in the last 5 seconds
+                                if (remainingTime <= 5) {{
+                                    setTimeout(() => {{
+                                        event.target.stopVideo();
+                                        clearInterval(qualityInterval);
+                                        box.style.opacity = 0;
+                                        setTimeout(() => box.remove(), 1000);
+                                    }}, remainingTime * 1000);
+                                    return;
+                                }}
+                                
+                                // Random pause duration (1-5 seconds)
+                                const pauseDuration = getRandomPause();
+                                // Random time until next pause (5-15 seconds of play)
+                                const timeUntilPause = Math.floor(Math.random() * 11) + 5;
+                                
+                                if (timeUntilPause < remainingTime) {{
+                                    setTimeout(() => {{
+                                        event.target.pauseVideo();
+                                        pauseCount++;
+                                        
+                                        // Resume after pause
+                                        setTimeout(() => {{
+                                            event.target.playVideo();
+                                            remainingTime -= (timeUntilPause + pauseDuration);
+                                            scheduleNextPause();
+                                        }}, pauseDuration * 1000);
+                                    }}, timeUntilPause * 1000);
+                                }} else {{
+                                    // Not enough time for another pause, just finish
+                                    setTimeout(() => {{
+                                        event.target.stopVideo();
+                                        clearInterval(qualityInterval);
+                                        box.style.opacity = 0;
+                                        setTimeout(() => box.remove(), 1000);
+                                    }}, remainingTime * 1000);
+                                }}
+                            }};
+                            
+                            // Start the pause scheduling
+                            scheduleNextPause();
+                        }}
+                    }});
+                }}
             }}
-        }}
-    }});
+        }});
+    }}, thinkingDelay);
 }}
 
 document.querySelectorAll(".video-box").forEach(box => {{
@@ -142,10 +216,11 @@ document.getElementById("shuffle-load").onclick = () => {{
     }}
     boxes.forEach(box => grid.appendChild(box));
 
-    // Sequential loading with 1–5s random delay
+    // Sequential loading with irregular spacing (1-8 seconds)
     let delay = 0;
     boxes.forEach(box => {{
-        let randomDelay = 1000 + Math.random() * 4000; // 1–5s
+        // 4️⃣ Slightly irregular load spacing (1-8 seconds)
+        let randomDelay = 1000 + Math.random() * 7000; // 1-8s
         setTimeout(() => {{
             loadPlayer(box);
         }}, delay);
