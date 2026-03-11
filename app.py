@@ -184,4 +184,4 @@ delay+=r
 </script>
 """
 
-st.components.v1.html(html, height=700, scrolling=True)
+st.components.v1.html(html, height=700, scrolling=True) 
