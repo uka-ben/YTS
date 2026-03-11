@@ -5,8 +5,10 @@ st.set_page_config(layout="wide")
 video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
-# Smaller thumbnail blocks
+# 50% smaller grid thumbnails
+thumbnail_width = 80  # px (was ~160px)
 html_blocks = []
+
 for i, vid in enumerate(video_ids):
     html_blocks.append(f"""
 <div class="video-box" data-video="{vid}" data-index="{i}">
@@ -22,7 +24,7 @@ html = """
     background:#000;
     padding:10px;
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); /* half size */
+    grid-template-columns:repeat(auto-fill,minmax(""" + f"{thumbnail_width}px" + """,1fr));
     gap:4px;
 }
 .video-box {
@@ -37,8 +39,14 @@ html = """
     object-fit:cover;
     border-radius:4px;
 }
+iframe {
+    width:100%;
+    height:100%;
+    border:none;
+    border-radius:4px;
+}
 button {
-    padding:6px 12px;
+    padding:8px 16px;
     font-size:14px;
     cursor:pointer;
     margin-bottom:10px;
@@ -66,7 +74,7 @@ function loadPlayer(box) {
 
     const vid = box.dataset.video;
     const idx = box.dataset.index;
-    const targetWatch = Math.floor(Math.random()*(46-35+1))+35; // seconds
+    const maxDuration = Math.floor(Math.random()*(46-35+1))+35;
 
     box.innerHTML = '<div id="p'+idx+'"></div>';
     box.classList.add("loaded");
@@ -87,48 +95,54 @@ function loadPlayer(box) {
             onStateChange:function(e){
                 if(e.data === YT.PlayerState.PLAYING){
                     let player = players[idx];
+
+                    // Force 144p repeatedly
                     player.setPlaybackQuality('tiny');
 
-                    // Track real watched time
-                    let watchedSec = 0;
-                    const tracker = setInterval(()=>{
-                        if(player.getPlayerState() === YT.PlayerState.PLAYING){
-                            watchedSec += 0.5; // count every 500ms
-                        }
-                        if(watchedSec >= targetWatch){
-                            player.stopVideo();
-                            clearInterval(tracker);
-                            box.style.opacity = 0;
-                            setTimeout(()=>box.remove(),500);
-                        }
+                    // Reduce DASH buffer to save data
+                    setTimeout(()=>{
+                        try {
+                            let t = player.getCurrentTime();
+                            player.seekTo(t + 0.05, true);
+                        } catch(e){}
                     },500);
+
+                    // --- START RANDOM WATCH TIMER ONLY ON PLAY ---
+                    if(!player._stopTimerStarted){
+                        player._stopTimerStarted = true; // flag
+                        setTimeout(()=>{
+                            player.stopVideo();
+                            box.style.opacity = 0;
+                            setTimeout(()=>box.remove(),1000);
+                        }, maxDuration * 1000);
+                    }
                 }
             }
         }
     });
 }
 
-// Click to load a player
+// Click to load a player manually
 document.querySelectorAll(".video-box").forEach(box=>{
     box.addEventListener("click",()=>loadPlayer(box));
 });
 
-// Shuffle + sequential load
+// Shuffle + sequential load with 0-1s random delay
 document.getElementById("shuffle-load").onclick = ()=>{
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
 
     // Shuffle
-    for(let i=boxes.length-1;i>0;i--){
+    for(let i=boxes.length-1; i>0; i--){
         let j = Math.floor(Math.random()*(i+1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }
     boxes.forEach(b => grid.appendChild(b));
 
-    // Sequential load 0–1s random delay
+    // Sequential load with 0-1s random delay
     let delay = 0;
     boxes.forEach(box=>{
-        let r = Math.random()*1000;
+        let r = Math.random()*1000; // 0-1000ms
         setTimeout(()=>{ loadPlayer(box); }, delay);
         delay += r;
     });
