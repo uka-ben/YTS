@@ -2,11 +2,11 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-# Videos: same video repeated for demo
-video_id = "hHt84PoKxsQ"
+# Video list (demo: same video repeated 20x)
+video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
-# Create thumbnail blocks
+# Create small thumbnail blocks
 html_blocks = []
 for i, vid in enumerate(video_ids):
     html_blocks.append(f"""
@@ -17,21 +17,22 @@ for i, vid in enumerate(video_ids):
 </div>
 """)
 
-# Full HTML/JS (triple quotes, no f-string issues)
+# Full HTML + JS (triple quotes to avoid f-string issues)
 html = """
 <style>
 #video-grid {
     background:#000;
     padding:10px;
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(48px,1fr)); /* smaller size */
+    grid-template-columns:repeat(auto-fill,minmax(48px,1fr)); /* very small 70% smaller */
     gap:4px;
 }
 .video-box {
     cursor:pointer;
     aspect-ratio:16/9;
     position:relative;
-    transition:opacity 0.7s;
+    transition:opacity 1s;
+    width:100%;
 }
 .thumb {
     width:100%;
@@ -40,16 +41,10 @@ html = """
     border-radius:4px;
 }
 button {
-    padding:6px 12px;
-    font-size:12px;
+    padding:8px 16px;
+    font-size:14px;
     cursor:pointer;
-    margin-bottom:6px;
-}
-iframe {
-    width:100%;
-    height:100%;
-    border:none;
-    border-radius:4px;
+    margin-bottom:10px;
 }
 </style>
 
@@ -63,19 +58,19 @@ iframe {
 
 <script>
 let players = {};
-let watchedTimes = {}; // Track actual watched seconds per player
+let watchedTimes = {};
 let APIready = false;
 
 function onYouTubeIframeAPIReady() {
     APIready = true;
 }
 
-function loadPlayer(box){
+function loadPlayer(box) {
     if(box.classList.contains("loaded") || !APIready) return;
 
     const vid = box.dataset.video;
     const idx = box.dataset.index;
-    const targetWatch = Math.floor(Math.random()*(46-35+1))+35; // random 35-46 sec
+    const targetWatch = Math.floor(Math.random()*(46-35+1))+35;
 
     box.innerHTML = '<div id="p'+idx+'"></div>';
     box.classList.add("loaded");
@@ -97,30 +92,30 @@ function loadPlayer(box){
                 const player = players[idx];
 
                 if(e.data === YT.PlayerState.PLAYING){
-                    // initialize watched time
-                    if(!watchedTimes[idx]) watchedTimes[idx]=0;
+                    if(!watchedTimes[idx]) watchedTimes[idx] = 0;
 
-                    // lock 144p
+                    // Force 144p
                     player.setPlaybackQuality('tiny');
 
-                    // reduce initial buffer to save data
+                    // Reduce DASH pre-buffer
                     setTimeout(()=>{
                         try {
                             let t = player.getCurrentTime();
                             player.seekTo(t + 0.05, true);
                         } catch(e){}
-                    },500);
+                    },1500);
 
-                    // count actual watched seconds
+                    // Track actual watched seconds
                     const intervalId = setInterval(()=>{
                         if(player.getPlayerState() === YT.PlayerState.PLAYING){
                             watchedTimes[idx] += 1;
                         }
+
                         if(watchedTimes[idx] >= targetWatch){
                             player.stopVideo();
                             clearInterval(intervalId);
-                            box.style.opacity=0;
-                            setTimeout(()=>box.remove(),700);
+                            box.style.opacity = 0;
+                            setTimeout(()=>box.remove(),1000);
                         }
                     },1000);
                 }
@@ -129,24 +124,24 @@ function loadPlayer(box){
     });
 }
 
-// Click thumbnail to play
+// Click to load individual player
 document.querySelectorAll(".video-box").forEach(box=>{
     box.addEventListener("click",()=>loadPlayer(box));
 });
 
-// Shuffle + sequential load with random 0-1s delay
+// Shuffle + sequential load with 0-1s random delay
 document.getElementById("shuffle-load").onclick = ()=>{
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
 
-    // shuffle
+    // Shuffle
     for(let i=boxes.length-1; i>0; i--){
         let j = Math.floor(Math.random()*(i+1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }
     boxes.forEach(b => grid.appendChild(b));
 
-    // sequential load with 0-1s random delay
+    // Sequential load with random 0–1s delay
     let delay = 0;
     boxes.forEach(box=>{
         let r = Math.random()*1000;
@@ -157,4 +152,4 @@ document.getElementById("shuffle-load").onclick = ()=>{
 </script>
 """
 
-st.components.v1.html(html, height=700, scrolling=True)
+st.components.v1.html(html, height=600, scrolling=True)
