@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "hHt84PoKxsQ"
+video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -73,7 +73,7 @@ function loadPlayer(box) {{
 
     // Mixed start strategy
     let start;
-    if(Math.random() < 0.7) {{
+    if(Math.random() < 0.7){{
         start = 0;
     }} else {{
         start = Math.floor(Math.random() * 200);
@@ -104,17 +104,19 @@ function loadPlayer(box) {{
         }},
         events: {{
             onReady: (event) => {{
-                // Listen for when the video actually starts playing
                 event.target.addEventListener('onStateChange', function(e) {{
                     if(e.data == YT.PlayerState.PLAYING) {{
-                        // Force 144p
-                        try {{
-                            event.target.setPlaybackQuality('tiny');
-                        }} catch(err){{}}
+                        // Continuously force 144p every second
+                        let qualityInterval = setInterval(() => {{
+                            try {{
+                                event.target.setPlaybackQuality('tiny');
+                            }} catch(e){{}}
+                        }}, 1000);
 
-                        // Stop and remove after duration
+                        // Stop video and destroy after duration
                         setTimeout(() => {{
                             event.target.stopVideo();
+                            clearInterval(qualityInterval);
                             box.style.opacity = 0;
                             setTimeout(() => box.remove(), 1000);
                         }}, duration * 1000);
@@ -133,14 +135,14 @@ document.getElementById("shuffle-load").onclick = () => {{
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
 
-    // Shuffle
-    for(let i = boxes.length-1; i>0; i--) {{
+    // Shuffle grid
+    for(let i=boxes.length-1; i>0; i--) {{
         const j = Math.floor(Math.random()*(i+1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }}
     boxes.forEach(box => grid.appendChild(box));
 
-    // Sequential load 1-5s
+    // Sequential loading with 1–5s random delay
     let delay = 0;
     boxes.forEach(box => {{
         let randomDelay = 1000 + Math.random() * 4000; // 1–5s
