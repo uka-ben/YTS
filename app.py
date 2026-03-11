@@ -3,17 +3,16 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id] * 40   # you can increase to 100+
+video_ids = [video_id] * 20
 
 html_blocks = []
 
 for vid in video_ids:
     html_blocks.append(f"""
 <div class="video-box" data-video="{vid}">
-    <img
-      src="https://i.ytimg.com/vi_webp/{vid}/hqdefault.webp"
-      loading="lazy"
-      class="thumb">
+    <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
+    loading="lazy"
+    class="thumb">
 </div>
 """)
 
@@ -25,14 +24,14 @@ html = f"""
 background:#000;
 padding:20px;
 display:grid;
-grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
 gap:8px;
 }}
 
 .video-box {{
-position:relative;
 cursor:pointer;
 aspect-ratio:16/9;
+position:relative;
 transition:opacity 1s;
 }}
 
@@ -59,7 +58,7 @@ margin-bottom:10px;
 
 </style>
 
-<button id="shuffle">Shuffle Grid</button>
+<button id="shuffle-load">Shuffle + Load Players</button>
 
 <div id="video-grid">
 {''.join(html_blocks)}
@@ -67,61 +66,64 @@ margin-bottom:10px;
 
 <script>
 
-function createPlayer(box){{
+function loadPlayer(box){{
 
 if(box.classList.contains("loaded")) return
 
 const vid = box.dataset.video
 
-const maxDuration = Math.floor(Math.random()*(46-35+1))+35
-
 const iframe = document.createElement("iframe")
 
 iframe.src =
 "https://www.youtube.com/embed/"+vid+
-"?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1&vq=tiny"
+"?autoplay=0&controls=1&rel=0&modestbranding=1&vq=tiny"
 
-iframe.allow = "autoplay"
+iframe.allow="autoplay"
 
-box.innerHTML = ""
+box.innerHTML=""
 
 box.appendChild(iframe)
 
 box.classList.add("loaded")
 
-setTimeout(()=>{{
-
-iframe.src=""
-
-box.style.opacity=0
-
-setTimeout(()=>box.remove(),1000)
-
-}}, maxDuration*1000)
-
 }}
 
 document.querySelectorAll(".video-box").forEach(box=>{{
 
-box.addEventListener("click", ()=>createPlayer(box))
+box.addEventListener("click",()=>loadPlayer(box))
 
 }})
 
-document.getElementById("shuffle").onclick=()=>{{
+document.getElementById("shuffle-load").onclick=()=>{{
 
 let grid=document.getElementById("video-grid")
 
-let nodes=[...grid.children]
+let boxes=[...grid.children]
 
-for(let i=nodes.length-1;i>0;i--){{
+/* shuffle */
 
+for(let i=boxes.length-1;i>0;i--){{
 let j=Math.floor(Math.random()*(i+1))
-
-;[nodes[i],nodes[j]]=[nodes[j],nodes[i]]
-
+;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
 }}
 
-nodes.forEach(n=>grid.appendChild(n))
+boxes.forEach(b=>grid.appendChild(b))
+
+/* sequential load */
+
+let delay=0
+
+boxes.forEach(box=>{{
+
+let randomDelay=Math.random()*1000
+
+setTimeout(()=>{{
+loadPlayer(box)
+}},delay)
+
+delay+=randomDelay
+
+}})
 
 }}
 
