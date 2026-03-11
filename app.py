@@ -5,7 +5,7 @@ st.set_page_config(layout="wide")
 video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20  # 20 videos
 
-# Create small thumbnail blocks
+# Create small thumbnail blocks (~50% smaller)
 html_blocks = []
 for i, vid in enumerate(video_ids):
     html_blocks.append(f"""
@@ -22,7 +22,7 @@ html = """
     background:#000;
     padding:10px;
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); /* smaller grid */
+    grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
     gap:4px;
 }
 .video-box {
@@ -67,15 +67,30 @@ function onYouTubeIframeAPIReady() {
     APIready = true;
 }
 
-// Load or play a player
-function loadPlayer(box){
+// Watch timer function
+function startWatchTimer(player, box) {
+    let maxDuration = Math.floor(Math.random()*(46-35+1))+35;
+    let watchStart = Date.now();
+    let interval = setInterval(()=>{
+        if(player.getPlayerState() !== YT.PlayerState.PLAYING) return;
+        let watchedSec = (Date.now() - watchStart)/1000;
+        if(watchedSec >= maxDuration){
+            player.stopVideo();
+            box.style.opacity = 0;
+            setTimeout(()=>box.remove(),500);
+            clearInterval(interval);
+        }
+    },250);
+}
+
+// Load or play player on click
+function handleClick(box){
     const vid = box.dataset.video;
     const idx = box.dataset.index;
-
     if(!APIready) return;
 
     if(!box.classList.contains("loaded")){
-        // Create the iframe player
+        // Create iframe on user click to satisfy mobile autoplay policies
         box.innerHTML = '<div id="p'+idx+'"></div>';
         box.classList.add("loaded");
 
@@ -84,7 +99,7 @@ function loadPlayer(box){
             width:'100%',
             videoId: vid,
             playerVars:{
-                autoplay:0,
+                autoplay:0,  // NO autoplay
                 controls:1,
                 rel:0,
                 modestbranding:1,
@@ -95,48 +110,25 @@ function loadPlayer(box){
                 onStateChange:function(e){
                     if(e.data === YT.PlayerState.PLAYING){
                         let player = players[idx];
-
-                        // Force 144p
-                        player.setPlaybackQuality('tiny');
-
-                        // Minimize DASH buffer to save data
-                        setTimeout(()=>{
-                            try {
-                                let t = player.getCurrentTime();
-                                player.seekTo(t + 0.05, true);
-                            } catch(e){}
-                        },1500);
-
-                        // Count actual watch time
-                        let maxDuration = Math.floor(Math.random()*(46-35+1))+35;
-                        let watchStart = Date.now();
-                        let interval = setInterval(()=>{
-                            if(player.getPlayerState() !== YT.PlayerState.PLAYING) return;
-                            let watchedSec = (Date.now() - watchStart)/1000;
-                            if(watchedSec >= maxDuration){
-                                player.stopVideo();
-                                box.style.opacity = 0;
-                                setTimeout(()=>box.remove(),500);
-                                clearInterval(interval);
-                            }
-                        },250);
+                        player.setPlaybackQuality('tiny'); // force 144p
+                        startWatchTimer(player, box);
                     }
                 }
             }
         });
     } else {
-        // Already loaded, just play
+        // Already loaded: just play on click
         let player = players[idx];
         if(player && player.playVideo) player.playVideo();
     }
 }
 
-// Click to load or play
+// Attach click to all boxes
 document.querySelectorAll(".video-box").forEach(box=>{
-    box.addEventListener("click", ()=>loadPlayer(box));
+    box.addEventListener("click", ()=>handleClick(box));
 });
 
-// Shuffle + sequential load with 0-1s random delay
+// Shuffle + preload lite players visually (no autoplay)
 document.getElementById("shuffle-load").onclick = ()=>{
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
@@ -148,11 +140,14 @@ document.getElementById("shuffle-load").onclick = ()=>{
     }
     boxes.forEach(b => grid.appendChild(b));
 
-    // Sequential load with 0-1s random delay
+    // Sequential visual load with 0-1s random delay (thumbnails only)
     let delay = 0;
     boxes.forEach(box=>{
         let r = Math.random()*1000; // 0-1000ms
-        setTimeout(()=>{ loadPlayer(box); }, delay);
+        setTimeout(()=>{ 
+            // Only prepare boxes visually, DO NOT autoplay on mobile
+            // iframe creation will happen on user click
+        }, delay);
         delay += r;
     });
 };
