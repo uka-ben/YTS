@@ -7,181 +7,179 @@ video_ids = [video_id] * 20
 
 html_blocks = []
 
-for i, vid in enumerate(video_ids):
+for vid in video_ids:
     html_blocks.append(f"""
-<div class="video-box" data-video="{vid}" data-index="{i}">
-<img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
-loading="lazy"
-class="thumb">
+<div class="video-box" data-video="{vid}">
+    <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
+         loading="lazy"
+         class="thumb">
 </div>
 """)
 
-html = """
+html = f"""
+
 <style>
 
-#video-grid{
+#video-grid {{
 background:#000;
-padding:10px;
+padding:20px;
 display:grid;
-grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
-gap:4px;
-}
+grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+gap:8px;
+}}
 
-.video-box{
+.video-box {{
 cursor:pointer;
 aspect-ratio:16/9;
 position:relative;
 transition:opacity 1s;
-}
+}}
 
-.thumb{
+.thumb {{
 width:100%;
 height:100%;
 object-fit:cover;
-border-radius:4px;
-}
+border-radius:6px;
+}}
 
-iframe{
+iframe {{
 width:100%;
 height:100%;
 border:none;
-border-radius:4px;
-}
+border-radius:6px;
+}}
 
-button{
-padding:8px 16px;
-font-size:14px;
+button {{
+padding:10px 20px;
+font-size:16px;
 cursor:pointer;
 margin-bottom:10px;
-}
+}}
 
 </style>
 
 <button id="shuffle-load">Shuffle + Load Players</button>
 
 <div id="video-grid">
-""" + "".join(html_blocks) + """
+{''.join(html_blocks)}
 </div>
-
-<script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
 
-let players={}
-let APIready=false
+function loadPlayer(box){{
 
-function onYouTubeIframeAPIReady(){
-APIready=true
-}
+if(box.classList.contains("loaded")) return
 
-function loadPlayer(box){
+const vid = box.dataset.video
 
-if(box.classList.contains("loaded") || !APIready) return
+/* random watch duration */
 
-const vid=box.dataset.video
-const idx=box.dataset.index
+const duration = Math.floor(Math.random()*(46-35+1))+35
 
-box.innerHTML='<div id="p'+idx+'"></div>'
+/* random starting point to prevent identical playback */
+
+const start = Math.floor(Math.random()*200)
+
+const end = start + duration
+
+const iframe = document.createElement("iframe")
+
+iframe.src =
+"https://www.youtube.com/embed/"+vid+
+"?autoplay=0"+
+"&controls=1"+
+"&rel=0"+
+"&modestbranding=1"+
+"&vq=tiny"+
+"&start="+start+
+"&end="+end
+
+iframe.allow="autoplay"
+
+box.innerHTML=""
+
+box.appendChild(iframe)
+
 box.classList.add("loaded")
 
-players[idx]=new YT.Player('p'+idx,{
+/* detect play click */
 
-height:'100%',
-width:'100%',
-videoId:vid,
+box.addEventListener("click",()=>{{
 
-playerVars:{
-autoplay:0,
-controls:1,
-rel:0,
-modestbranding:1,
-playsinline:1,
-vq:'tiny'
-},
+setTimeout(()=>{{
 
-events:{
-onStateChange:function(e){
+try{{
+iframe.contentWindow.postMessage(JSON.stringify({{
+event:'command',
+func:'setPlaybackQuality',
+args:['tiny']
+}}),'*')
+}}catch(e){{}}
 
-if(e.data===YT.PlayerState.PLAYING){
+}},1000)
 
-let player=players[idx]
+/* stop and remove player */
 
-const maxDuration=Math.floor(Math.random()*(46-35+1))+35
+setTimeout(()=>{{
 
-player.setPlaybackQuality('tiny')
-
-setTimeout(()=>{
-try{
-let t=player.getCurrentTime()
-player.seekTo(t+0.05,true)
-}catch(e){}
-},500)
-
-if(!player.timerStarted){
-
-player.timerStarted=true
-
-setTimeout(()=>{
-
-player.stopVideo()
-
-let box=document.getElementById('p'+idx).parentElement
+iframe.src=""
 
 box.style.opacity=0
 
 setTimeout(()=>box.remove(),1000)
 
-},maxDuration*1000)
+}}, duration*1000)
 
-}
+}},{{once:true}})
 
-}
+}}
 
-}
-
-}
-
-})
-
-}
-
-document.querySelectorAll(".video-box").forEach(box=>{
+document.querySelectorAll(".video-box").forEach(box=>{{
 
 box.addEventListener("click",()=>loadPlayer(box))
 
-})
+}})
 
-document.getElementById("shuffle-load").onclick=()=>{
+document.getElementById("shuffle-load").onclick=()=>{{
 
 let grid=document.getElementById("video-grid")
 
 let boxes=[...grid.children]
 
-for(let i=boxes.length-1;i>0;i--){
+/* shuffle grid */
+
+for(let i=boxes.length-1;i>0;i--){{
 
 let j=Math.floor(Math.random()*(i+1))
 
 ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
 
-}
+}}
 
 boxes.forEach(b=>grid.appendChild(b))
 
+/* sequential loading */
+
 let delay=0
 
-boxes.forEach(box=>{
+boxes.forEach(box=>{{
 
-let r=Math.random()*1000
+let randomDelay=Math.random()*1000
 
-setTimeout(()=>{loadPlayer(box)},delay)
+setTimeout(()=>{{
 
-delay+=r
+loadPlayer(box)
 
-})
+}},delay)
 
-}
+delay+=randomDelay
+
+}})
+
+}}
 
 </script>
+
 """
 
-st.components.v1.html(html, height=700, scrolling=True) 
+st.components.v1.html(html, height=900, scrolling=True)
