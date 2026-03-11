@@ -72,13 +72,17 @@ if(box.classList.contains("loaded")) return
 
 const vid = box.dataset.video
 
-/* random watch duration */
+/* mixed start strategy */
+
+let start
+
+if(Math.random() < 0.7){{
+start = 0
+}}else{{
+start = Math.floor(Math.random()*200)
+}}
 
 const duration = Math.floor(Math.random()*(46-35+1))+35
-
-/* random starting point to prevent identical playback */
-
-const start = Math.floor(Math.random()*200)
 
 const end = start + duration
 
@@ -118,7 +122,7 @@ args:['tiny']
 
 }},1000)
 
-/* stop and remove player */
+/* remove player after duration */
 
 setTimeout(()=>{{
 
@@ -149,11 +153,8 @@ let boxes=[...grid.children]
 /* shuffle grid */
 
 for(let i=boxes.length-1;i>0;i--){{
-
 let j=Math.floor(Math.random()*(i+1))
-
 ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
-
 }}
 
 boxes.forEach(b=>grid.appendChild(b))
