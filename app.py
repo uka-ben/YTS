@@ -2,12 +2,12 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "5ow-Zk_2IG8"
+#video_id = "5ow-Zk_2IG8"
 import streamlit as st
 
-st.set_page_config(layout="wide")
+#st.set_page_config(layout="wide")
 
-#video_id = "JZYnS6ypa2g"
+video_id = "XuEAtQUrhkc"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -35,7 +35,7 @@ position:relative;
 cursor:pointer;
 aspect-ratio:16/9;
 position:relative;
-transition:opacity 1s ease-in-out;
+transition:opacity 1s;
 }}
 .thumb {{
 width:100%;
@@ -127,47 +127,48 @@ background:#ff0000;
 width:0%;
 transition:width 0.3s;
 }}
-.debug-container {{
+.debug-console {{
 position:fixed;
 bottom:20px;
 left:20px;
-z-index:10001;
-max-width:400px;
-}}
-.debug-toggle {{
-background:#333;
-color:#fff;
-border:none;
-padding:5px 10px;
-border-radius:5px;
-cursor:pointer;
-font-size:12px;
-margin-bottom:5px;
-}}
-.debug-console {{
-background:rgba(0,0,0,0.9);
+background:rgba(0,0,0,0.8);
 color:#0f0;
 padding:10px;
 border-radius:5px;
 font-family:monospace;
-font-size:11px;
-max-height:200px;
+font-size:12px;
+z-index:10001;
+max-width:400px;
+max-height:300px;
 overflow:auto;
-display:none;
-border:1px solid #0f0;
 }}
-.debug-console.visible {{
-display:block;
+.debug-header {{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:5px;
+padding-bottom:5px;
+border-bottom:1px solid #0f0;
 }}
-.clear-log {{
-background:#444;
-color:#fff;
-border:none;
+.debug-header button {{
 padding:2px 8px;
+font-size:11px;
+background:#333;
+color:#0f0;
+border:1px solid #0f0;
 border-radius:3px;
 cursor:pointer;
-font-size:10px;
-margin-left:5px;
+}}
+.debug-header button:hover {{
+background:#0f0;
+color:#000;
+}}
+.debug-content {{
+max-height:250px;
+overflow-y:auto;
+}}
+.hidden {{
+display:none !important;
 }}
 </style>
 
@@ -182,10 +183,12 @@ margin-left:5px;
 <div id="play-all-overlay"></div>
 <div class="play-all-hint loading" id="play-all-hint" style="display:none;">⏳ Loading videos... please wait</div>
 
-<div class="debug-container">
-    <button class="debug-toggle" id="debug-toggle">🐛 Show Logs</button>
-    <button class="clear-log" id="clear-log">Clear</button>
-    <div class="debug-console" id="debug-console"></div>
+<div class="debug-console" id="debug-console">
+    <div class="debug-header">
+        <span>🐛 Debug Logs</span>
+        <button id="toggle-debug">Hide</button>
+    </div>
+    <div class="debug-content" id="debug-content"></div>
 </div>
 
 <div id="video-grid">
@@ -202,35 +205,29 @@ let hint = document.getElementById("play-all-hint");
 let loadingStatus = document.getElementById("loading-status");
 let loadingProgress = document.getElementById("loading-progress");
 let debugConsole = document.getElementById("debug-console");
-let debugToggle = document.getElementById("debug-toggle");
-let clearLog = document.getElementById("clear-log");
+let debugContent = document.getElementById("debug-content");
+let toggleDebug = document.getElementById("toggle-debug");
 let totalVideos = document.querySelectorAll(".video-box").length;
 let isLoadingComplete = false;
 let isPlayingActive = false;
 let playedBoxes = new Set();
-let logsVisible = false;
 
-// Debug toggle functionality
-debugToggle.addEventListener("click", function() {{
-    if (logsVisible) {{
-        debugConsole.classList.remove("visible");
-        debugToggle.textContent = "🐛 Show Logs";
+// Toggle debug logs
+toggleDebug.addEventListener("click", function() {{
+    if (debugContent.classList.contains("hidden")) {{
+        debugContent.classList.remove("hidden");
+        toggleDebug.textContent = "Hide";
     }} else {{
-        debugConsole.classList.add("visible");
-        debugToggle.textContent = "🐛 Hide Logs";
+        debugContent.classList.add("hidden");
+        toggleDebug.textContent = "Show";
     }}
-    logsVisible = !logsVisible;
-}});
-
-clearLog.addEventListener("click", function() {{
-    debugConsole.innerHTML = '';
 }});
 
 function debug(msg) {{
     console.log(msg);
     let timeStr = new Date().toLocaleTimeString();
-    debugConsole.innerHTML += '<div>[' + timeStr + '] ' + msg + '</div>';
-    debugConsole.scrollTop = debugConsole.scrollHeight;
+    debugContent.innerHTML += '<div>' + timeStr + ': ' + msg + '</div>';
+    debugContent.scrollTop = debugContent.scrollHeight;
 }}
 
 function onYouTubeIframeAPIReady() {{
@@ -253,7 +250,6 @@ function updateLoadingProgress() {{
     if (loadedCount === totalVideos && !isLoadingComplete) {{
         isLoadingComplete = true;
         debug("All videos loaded - ready to play!");
-        
         hint.innerHTML = "🎬 Click here to start playing (random order)";
         hint.classList.remove("loading");
         hint.classList.add("ready");
@@ -308,24 +304,16 @@ function simulateVolumeControl(player, viewerProfile) {{
     }}
 }}
 
-function destroyVideo(box) {{
-    if (!box) return;
-    
+function destroyVideo(box, player) {{
     debug("Destroying video: " + box.dataset.video);
     
-    // Get player and destroy it
-    const player = loadedPlayers.get(box);
-    if (player && player.destroy) {{
-        try {{
-            player.destroy();
-        }} catch(e) {{
-            debug("Error destroying player: " + e);
-        }}
-    }}
+    // Stop the video if it's playing
+    try {{
+        player.stopVideo();
+    }} catch(e) {{}}
     
-    // Remove from maps
+    // Remove from map
     loadedPlayers.delete(box);
-    playedBoxes.delete(box);
     
     // Fade out and remove
     box.style.opacity = '0';
@@ -380,6 +368,8 @@ function startRandomPlayback() {{
     const totalVids = shuffledBoxes.length;
     const earlyCount = Math.floor(totalVids * 0.2);
     const mediumCount = Math.floor(totalVids * 0.3);
+    
+    debug(`Timing groups: Early: ${{earlyCount}} (0-12s), Medium: ${{mediumCount}} (12-30s), Late: ${{totalVids - earlyCount - mediumCount}} (30-60s)`);
     
     shuffledBoxes.forEach((box, index) => {{
         playedBoxes.add(box);
@@ -470,28 +460,37 @@ function loadPlayer(box) {{
                             if (videoEndTimer) clearTimeout(videoEndTimer);
                             if (qualityInterval) clearInterval(qualityInterval);
                             
-                            // Force 144p every second
+                            // Force 144p
                             qualityInterval = setInterval(() => {{
                                 try {{
                                     event.target.setPlaybackQuality('tiny');
                                 }} catch(e){{}}
                             }}, 1000);
                             
-                            // Calculate remaining time based on duration and current position
-                            event.target.getCurrentTime().then((currentTime) => {{
+                            // Calculate remaining time based on start position
+                            const getCurrentTime = () => {{
+                                return new Promise((resolve) => {{
+                                    try {{
+                                        event.target.getCurrentTime().then(resolve);
+                                    }} catch(e) {{
+                                        resolve(0);
+                                    }}
+                                }});
+                            }};
+                            
+                            getCurrentTime().then((currentTime) => {{
                                 const elapsed = currentTime - start;
                                 const remaining = Math.max(0, duration - elapsed);
+                                debug(`Video playback: elapsed=${{Math.round(elapsed)}}s, remaining=${{Math.round(remaining)}}s`);
                                 
-                                debug(`Video will end in ${{Math.round(remaining)}} seconds`);
-                                
-                                // Set timer to destroy video when it reaches the end
+                                // Schedule destruction when video ends
                                 videoEndTimer = setTimeout(() => {{
-                                    debug("Video reached max duration, destroying: " + vid);
+                                    debug("Video reached max duration: " + vid);
+                                    destroyVideo(box, event.target);
                                     if (qualityInterval) clearInterval(qualityInterval);
-                                    destroyVideo(box);
                                 }}, remaining * 1000);
                             }});
-
+                            
                             let remainingTime = duration;
                             let pauseCount = 0;
                             
@@ -515,7 +514,7 @@ function loadPlayer(box) {{
                                             event.target.pauseVideo();
                                             pauseCount++;
                                             
-                                            // Clear end timer while paused
+                                            // Clear and reset the end timer during pause
                                             if (videoEndTimer) {{
                                                 clearTimeout(videoEndTimer);
                                                 videoEndTimer = null;
@@ -525,12 +524,14 @@ function loadPlayer(box) {{
                                                 event.target.playVideo();
                                                 remainingTime -= (timeUntilAction + pauseDuration);
                                                 
-                                                // Reset end timer with new remaining time
-                                                videoEndTimer = setTimeout(() => {{
-                                                    debug("Video reached max duration after pause, destroying: " + vid);
-                                                    if (qualityInterval) clearInterval(qualityInterval);
-                                                    destroyVideo(box);
-                                                }}, remainingTime * 1000);
+                                                // Reset end timer after resume
+                                                if (!videoEndTimer) {{
+                                                    videoEndTimer = setTimeout(() => {{
+                                                        debug("Video reached max duration after pause: " + vid);
+                                                        destroyVideo(box, event.target);
+                                                        if (qualityInterval) clearInterval(qualityInterval);
+                                                    }}, remainingTime * 1000);
+                                                }}
                                                 
                                                 scheduleNextAction();
                                             }}, pauseDuration * 1000);
@@ -540,14 +541,14 @@ function loadPlayer(box) {{
                                                 event.target.seekTo(newTime, true);
                                                 remainingTime -= timeUntilAction;
                                                 
-                                                // Update end timer based on new position
+                                                // Adjust end timer after skip
                                                 if (videoEndTimer) {{
                                                     clearTimeout(videoEndTimer);
                                                 }}
                                                 videoEndTimer = setTimeout(() => {{
-                                                    debug("Video reached max duration after skip, destroying: " + vid);
+                                                    debug("Video reached max duration after skip: " + vid);
+                                                    destroyVideo(box, event.target);
                                                     if (qualityInterval) clearInterval(qualityInterval);
-                                                    destroyVideo(box);
                                                 }}, remainingTime * 1000);
                                                 
                                                 scheduleNextAction();
@@ -567,8 +568,8 @@ function loadPlayer(box) {{
                             }}
                         }} else if (e.data == YT.PlayerState.ENDED) {{
                             debug("Video ended naturally: " + vid);
+                            destroyVideo(box, event.target);
                             if (qualityInterval) clearInterval(qualityInterval);
-                            destroyVideo(box);
                         }}
                     }});
                 }}
@@ -602,7 +603,7 @@ document.getElementById("shuffle-load").onclick = function() {{
     // Destroy all existing players first
     for (let [box, player] of loadedPlayers) {{
         try {{
-            if (player && player.destroy) player.destroy();
+            player.destroy();
         }} catch(e) {{}}
     }}
     
@@ -616,6 +617,9 @@ document.getElementById("shuffle-load").onclick = function() {{
         const j = Math.floor(Math.random()*(i+1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }}
+    
+    // Clear and rebuild grid
+    grid.innerHTML = '';
     boxes.forEach(box => grid.appendChild(box));
 
     hint.style.display = "block";
@@ -635,7 +639,7 @@ document.getElementById("shuffle-load").onclick = function() {{
         delay += randomDelay;
     }});
     
-    debug(`Scheduled ${{boxes.length}} videos to load over ~${{Math.round(delay/1000)}} seconds`);
+    debug(`Scheduled ${{boxes.length}} videos to load over ~${{Math.round(delay/1000)}} seconds (1-12s between loads)`);
 }};
 </script>
 """
