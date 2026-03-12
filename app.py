@@ -61,17 +61,17 @@ top:0;
 left:0;
 width:100%;
 height:100%;
-background:rgba(255,0,0,0.05); /* Slightly visible for debugging - remove opacity for transparent */
+background:rgba(255,0,0,0.05);
 z-index:9999;
 cursor:pointer;
 display:none;
-pointer-events:auto; /* Ensure it captures clicks */
+pointer-events:auto;
 }}
 #play-all-overlay.active {{
 display:block;
 }}
 #play-all-overlay.playing {{
-background:rgba(0,255,0,0.05); /* Green tint when in playing mode */
+background:rgba(0,255,0,0.05);
 }}
 .play-all-hint {{
 position:fixed;
@@ -120,7 +120,6 @@ z-index:10001;
 max-width:300px;
 max-height:200px;
 overflow:auto;
-display:none;
 }}
 </style>
 
@@ -144,8 +143,7 @@ display:none;
 
 <script>
 let YT_API_ready = false;
-let loadedPlayers = []; 
-let playerToBoxMap = new Map(); 
+let loadedPlayers = new Map(); // Map box -> player
 let overlay = document.getElementById("play-all-overlay");
 let hint = document.getElementById("play-all-hint");
 let loadingStatus = document.getElementById("loading-status");
@@ -156,7 +154,6 @@ let isContinuousPlayActive = false;
 let playedBoxes = new Set(); 
 let isLoadingComplete = false;
 
-// Debug function
 function debug(msg) {{
     console.log(msg);
     debugConsole.style.display = 'block';
@@ -234,37 +231,28 @@ function simulateVolumeControl(player, viewerProfile) {{
     }}
 }}
 
-function clickVideo(box) {{
-    if (!box || playedBoxes.has(box)) {{
-        debug("Skipping already played video");
-        return;
+function playVideo(box) {{
+    if (!box) return;
+    
+    // Get the player for this box
+    const player = loadedPlayers.get(box);
+    
+    if (player) {{
+        debug("Playing video: " + box.dataset.video);
+        player.playVideo();
+        
+        // Visual feedback
+        box.style.transform = 'scale(0.95)';
+        box.style.transition = 'transform 0.1s';
+        setTimeout(() => {{
+            box.style.transform = 'scale(1)';
+        }}, 100);
+        
+        return true;
+    }} else {{
+        debug("ERROR: No player found for box");
+        return false;
     }}
-    
-    // Mark as played immediately
-    playedBoxes.add(box);
-    debug("Clicking video: " + box.dataset.video);
-    
-    // Get box position for click
-    const rect = box.getBoundingClientRect();
-    
-    // Create and dispatch click event
-    const clickEvent = new MouseEvent('click', {{
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + rect.width/2, // Click in middle of video
-        clientY: rect.top + rect.height/2
-    }});
-    
-    // Dispatch the click
-    box.dispatchEvent(clickEvent);
-    
-    // Visual feedback
-    box.style.transform = 'scale(0.95)';
-    box.style.transition = 'transform 0.1s';
-    setTimeout(() => {{
-        box.style.transform = 'scale(1)';
-    }}, 100);
 }}
 
 function startContinuousPlay() {{
@@ -274,17 +262,18 @@ function startContinuousPlay() {{
         hint.innerHTML = "▶️ Playing videos as they load... (click to stop)";
         debug("Started continuous play mode");
         
-        // Click any already loaded videos
+        // Play any already loaded videos
         const loadedBoxes = Array.from(document.querySelectorAll(".video-box.loaded"));
         debug(`Found ${{loadedBoxes.length}} loaded videos to play`);
         
         let delay = 0;
         loadedBoxes.forEach(box => {{
             if (!playedBoxes.has(box)) {{
+                playedBoxes.add(box); // Mark as played
                 setTimeout(() => {{
-                    clickVideo(box);
+                    playVideo(box);
                 }}, delay);
-                delay += 2000 + Math.random() * 3000; // 2-5 seconds between clicks
+                delay += 2000 + Math.random() * 3000; // 2-5 seconds between plays
             }}
         }});
     }}
@@ -297,9 +286,9 @@ function stopContinuousPlay() {{
     debug("Stopped continuous play mode");
 }}
 
-// Overlay click handler - MULTIPLE ways to ensure it works
+// Overlay click handler
 overlay.addEventListener("click", function(e) {{
-    e.stopPropagation(); // Prevent event bubbling issues
+    e.stopPropagation();
     debug("Overlay clicked!");
     
     if (isContinuousPlayActive) {{
@@ -307,11 +296,6 @@ overlay.addEventListener("click", function(e) {{
     }} else {{
         startContinuousPlay();
     }}
-}});
-
-// Also add mousedown for redundancy
-overlay.addEventListener("mousedown", function(e) {{
-    e.preventDefault(); // Prevent any default behavior
 }});
 
 function loadPlayer(box) {{
@@ -350,18 +334,11 @@ function loadPlayer(box) {{
             }},
             events: {{
                 onReady: (event) => {{
-                    loadedPlayers.push(event.target);
-                    playerToBoxMap.set(event.target, box);
+                    // Store player with box as key
+                    loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
                     
                     debug("Player ready for video: " + vid);
-                    
-                    // If continuous play is active, click this video
-                    if (isContinuousPlayActive && !playedBoxes.has(box)) {{
-                        setTimeout(() => {{
-                            clickVideo(box);
-                        }}, 1000 + Math.random() * 2000);
-                    }}
                     
                     const initialVolume = Math.floor(Math.random() * 
                         (viewerProfile.volumeRange[1] - viewerProfile.volumeRange[0] + 1)) + 
@@ -369,6 +346,14 @@ function loadPlayer(box) {{
                     event.target.setVolume(initialVolume);
                     
                     simulateVolumeControl(event.target, viewerProfile);
+                    
+                    // If continuous play is active, play this video
+                    if (isContinuousPlayActive && !playedBoxes.has(box)) {{
+                        playedBoxes.add(box);
+                        setTimeout(() => {{
+                            playVideo(box);
+                        }}, 1000 + Math.random() * 2000);
+                    }}
                     
                     event.target.addEventListener('onStateChange', function(e) {{
                         if(e.data == YT.PlayerState.PLAYING) {{
@@ -453,11 +438,22 @@ function loadPlayer(box) {{
     }}, thinkingDelay);
 }}
 
-// Manual click handler
+// Manual click handler - NOW JUST PLAYS THE VIDEO, doesn't reload
 document.querySelectorAll(".video-box").forEach(box => {{
     box.addEventListener("click", function(e) {{
+        e.stopPropagation();
         debug("Manual click on video: " + this.dataset.video);
-        loadPlayer(this);
+        
+        if (this.classList.contains("loaded")) {{
+            // Video is loaded, just play it
+            if (!playedBoxes.has(this)) {{
+                playedBoxes.add(this);
+                playVideo(this);
+            }}
+        }} else {{
+            // Video not loaded yet, load it first
+            loadPlayer(this);
+        }}
     }});
 }});
 
@@ -467,8 +463,7 @@ document.getElementById("shuffle-load").onclick = function() {{
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
 
-    loadedPlayers = [];
-    playerToBoxMap.clear();
+    loadedPlayers.clear();
     playedBoxes.clear();
     stopContinuousPlay();
     isLoadingComplete = false;
