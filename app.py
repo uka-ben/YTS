@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 video_id = "JZYnS6ypa2g"
-video_ids = [video_id] * 20  # Using 20 for demo
+video_ids = [video_id] * 20
 
 html_blocks = []
 
@@ -61,29 +61,31 @@ top:0;
 left:0;
 width:100%;
 height:100%;
-background:transparent;
+background:rgba(255,0,0,0.05); /* Slightly visible for debugging - remove opacity for transparent */
 z-index:9999;
 cursor:pointer;
 display:none;
+pointer-events:auto; /* Ensure it captures clicks */
 }}
 #play-all-overlay.active {{
 display:block;
 }}
 #play-all-overlay.playing {{
-cursor:wait; /* Changes cursor when in continuous play mode */
+background:rgba(0,255,0,0.05); /* Green tint when in playing mode */
 }}
 .play-all-hint {{
 position:fixed;
 bottom:20px;
 right:20px;
-background:rgba(255,255,255,0.9);
-padding:10px 20px;
+background:rgba(255,255,255,0.95);
+padding:15px 25px;
 border-radius:30px;
-box-shadow:0 2px 10px rgba(0,0,0,0.3);
+box-shadow:0 4px 20px rgba(0,0,0,0.5);
 z-index:10000;
 font-weight:bold;
 color:#333;
-border:2px solid #ff0000;
+border:3px solid #ff0000;
+font-size:16px;
 }}
 .loading-status {{
 margin-left:20px;
@@ -104,6 +106,22 @@ background:#ff0000;
 width:0%;
 transition:width 0.3s;
 }}
+.debug-console {{
+position:fixed;
+bottom:20px;
+left:20px;
+background:rgba(0,0,0,0.8);
+color:#0f0;
+padding:10px;
+border-radius:5px;
+font-family:monospace;
+font-size:12px;
+z-index:10001;
+max-width:300px;
+max-height:200px;
+overflow:auto;
+display:none;
+}}
 </style>
 
 <div class="button-container">
@@ -115,7 +133,8 @@ transition:width 0.3s;
 </div>
 
 <div id="play-all-overlay"></div>
-<div class="play-all-hint" id="play-all-hint" style="display:none;">👆 Click once - videos will play automatically as they load</div>
+<div class="play-all-hint" id="play-all-hint" style="display:none;">👆 Click here to start playing</div>
+<div class="debug-console" id="debug-console"></div>
 
 <div id="video-grid">
 {''.join(html_blocks)}
@@ -125,156 +144,164 @@ transition:width 0.3s;
 
 <script>
 let YT_API_ready = false;
-let loadedPlayers = []; // Store references to all loaded players
-let playerToBoxMap = new Map(); // Map to track which player belongs to which box
+let loadedPlayers = []; 
+let playerToBoxMap = new Map(); 
 let overlay = document.getElementById("play-all-overlay");
 let hint = document.getElementById("play-all-hint");
 let loadingStatus = document.getElementById("loading-status");
 let loadingProgress = document.getElementById("loading-progress");
+let debugConsole = document.getElementById("debug-console");
 let totalVideos = document.querySelectorAll(".video-box").length;
-let isContinuousPlayActive = false; // Whether we're in "auto-play as they load" mode
-let playedBoxes = new Set(); // Track which boxes we've already clicked
+let isContinuousPlayActive = false; 
+let playedBoxes = new Set(); 
+let isLoadingComplete = false;
+
+// Debug function
+function debug(msg) {{
+    console.log(msg);
+    debugConsole.style.display = 'block';
+    debugConsole.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + msg + '</div>';
+    debugConsole.scrollTop = debugConsole.scrollHeight;
+}}
 
 function onYouTubeIframeAPIReady() {{
     YT_API_ready = true;
+    debug("YouTube API ready");
 }}
 
-// Different viewer "personalities"
 const viewerTypes = [
-    {{ type: "binger", pauseChance: 0.1, maxPauses: 1, skipChance: 0.2, volumeRange: [70, 100] }},      // Watches straight through, normal volume
-    {{ type: "distracted", pauseChance: 0.4, maxPauses: 3, skipChance: 0.6, volumeRange: [30, 70] }},   // Gets interrupted, lower volume
-    {{ type: "skimmer", pauseChance: 0.2, maxPauses: 2, skipChance: 0.8, volumeRange: [50, 85] }}       // Skips around, medium volume
+    {{ type: "binger", pauseChance: 0.1, maxPauses: 1, skipChance: 0.2, volumeRange: [70, 100] }},
+    {{ type: "distracted", pauseChance: 0.4, maxPauses: 3, skipChance: 0.6, volumeRange: [30, 70] }},
+    {{ type: "skimmer", pauseChance: 0.2, maxPauses: 2, skipChance: 0.8, volumeRange: [50, 85] }}
 ];
 
 function updateLoadingProgress() {{
-    let loadedCount = document.querySelectorAll(".video-box.loaded").length;
+    loadedCount = document.querySelectorAll(".video-box.loaded").length;
     loadingStatus.textContent = `${{loadedCount}}/${{totalVideos}} loaded`;
     let percent = (loadedCount / totalVideos) * 100;
     loadingProgress.style.width = percent + "%";
+    
+    if (loadedCount === totalVideos && !isLoadingComplete) {{
+        isLoadingComplete = true;
+        debug("All videos loaded");
+    }}
 }}
 
 function getRandomStart() {{
     const rand = Math.random();
-    
-    if (rand < 0.7) {{  // 70% start at beginning
-        return 0;
-    }} else if (rand < 0.85) {{  // 15% start early (10-30s)
-        return Math.floor(Math.random() * 20) + 10;  // 10-30 seconds
-    }} else {{  // 15% start mid-video (60-180s)
-        return Math.floor(Math.random() * 120) + 60;  // 60-180 seconds
-    }}
+    if (rand < 0.7) return 0;
+    else if (rand < 0.85) return Math.floor(Math.random() * 20) + 10;
+    else return Math.floor(Math.random() * 120) + 60;
 }}
 
 function getRandomDuration() {{
-    return Math.floor(Math.random() * 17) + 45;  // 45-61 seconds
+    return Math.floor(Math.random() * 17) + 45;
 }}
 
 function getRandomPause() {{
-    return Math.floor(Math.random() * 5) + 2;  // 2-6 seconds
+    return Math.floor(Math.random() * 5) + 2;
 }}
 
 function simulateSkip(currentTime, duration, viewerProfile) {{
-    // Random number of skips (0-3)
     const numSkips = Math.floor(Math.random() * 4);
     let newTime = currentTime;
     
     for (let i = 0; i < numSkips; i++) {{
-        // Random chance to skip based on viewer personality
         if (Math.random() < viewerProfile.skipChance) {{
-            // Randomly choose forward or backward skip
-            const skipDirection = Math.random() < 0.6 ? 10 : -10; // 60% forward, 40% backward
-            
-            // Add some randomness to skip amount (±3 seconds)
-            const skipVariation = Math.floor(Math.random() * 7) - 3; // -3 to +3
+            const skipDirection = Math.random() < 0.6 ? 10 : -10;
+            const skipVariation = Math.floor(Math.random() * 7) - 3;
             const skipAmount = skipDirection + skipVariation;
-            
             newTime += skipAmount;
-            
-            // Keep within bounds
             newTime = Math.max(0, Math.min(newTime, duration - 5));
         }}
     }}
-    
     return newTime;
 }}
 
 function simulateVolumeControl(player, viewerProfile) {{
-    // Random volume changes 1-3 times during playback
     const numVolumeChanges = Math.floor(Math.random() * 3) + 1;
     
     for (let i = 0; i < numVolumeChanges; i++) {{
-        const delay = Math.floor(Math.random() * 20000) + 5000; // 5-25 seconds
-        
+        const delay = Math.floor(Math.random() * 20000) + 5000;
         setTimeout(() => {{
             try {{
-                // Random volume within viewer's preferred range
                 const minVol = viewerProfile.volumeRange[0];
                 const maxVol = viewerProfile.volumeRange[1];
                 const newVolume = Math.floor(Math.random() * (maxVol - minVol + 1)) + minVol;
-                
-                // YouTube API volume is 0-100
                 player.setVolume(newVolume);
-                console.log(`Volume changed to ${{newVolume}}%`);
             }} catch(e) {{}}
         }}, delay);
     }}
 }}
 
-// Function to click a single video naturally
 function clickVideo(box) {{
-    if (!box || playedBoxes.has(box)) return; // Skip if already clicked
+    if (!box || playedBoxes.has(box)) {{
+        debug("Skipping already played video");
+        return;
+    }}
     
-    // Mark as played immediately to prevent double-clicking
+    // Mark as played immediately
     playedBoxes.add(box);
+    debug("Clicking video: " + box.dataset.video);
     
-    // Create and dispatch a real mouse click event
+    // Get box position for click
+    const rect = box.getBoundingClientRect();
+    
+    // Create and dispatch click event
     const clickEvent = new MouseEvent('click', {{
         view: window,
         bubbles: true,
         cancelable: true,
-        clientX: box.getBoundingClientRect().left + 10,
-        clientY: box.getBoundingClientRect().top + 10
+        clientX: rect.left + rect.width/2, // Click in middle of video
+        clientY: rect.top + rect.height/2
     }});
     
-    // Dispatch the click on the box
+    // Dispatch the click
     box.dispatchEvent(clickEvent);
     
     // Visual feedback
-    box.style.transform = 'scale(0.98)';
+    box.style.transform = 'scale(0.95)';
+    box.style.transition = 'transform 0.1s';
     setTimeout(() => {{
         box.style.transform = 'scale(1)';
     }}, 100);
-    
-    console.log("Auto-clicked newly loaded video");
 }}
 
-// Function to start continuous play mode
 function startContinuousPlay() {{
-    isContinuousPlayActive = true;
-    overlay.classList.add("playing");
-    hint.innerHTML = "▶️ Continuously playing videos as they load... (click to stop)";
-    
-    // Click any videos that are already loaded but not played
-    const loadedBoxes = Array.from(document.querySelectorAll(".video-box.loaded"));
-    loadedBoxes.forEach(box => {{
-        if (!playedBoxes.has(box)) {{
-            // Small random delay for each video (1-3 seconds)
-            setTimeout(() => {{
-                clickVideo(box);
-            }}, 1000 + Math.random() * 2000);
-        }}
-    }});
+    if (!isContinuousPlayActive) {{
+        isContinuousPlayActive = true;
+        overlay.classList.add("playing");
+        hint.innerHTML = "▶️ Playing videos as they load... (click to stop)";
+        debug("Started continuous play mode");
+        
+        // Click any already loaded videos
+        const loadedBoxes = Array.from(document.querySelectorAll(".video-box.loaded"));
+        debug(`Found ${{loadedBoxes.length}} loaded videos to play`);
+        
+        let delay = 0;
+        loadedBoxes.forEach(box => {{
+            if (!playedBoxes.has(box)) {{
+                setTimeout(() => {{
+                    clickVideo(box);
+                }}, delay);
+                delay += 2000 + Math.random() * 3000; // 2-5 seconds between clicks
+            }}
+        }});
+    }}
 }}
 
-// Function to stop continuous play mode
 function stopContinuousPlay() {{
     isContinuousPlayActive = false;
     overlay.classList.remove("playing");
-    hint.innerHTML = "👆 Click once - videos will play automatically as they load";
+    hint.innerHTML = "👆 Click here to start playing";
+    debug("Stopped continuous play mode");
 }}
 
-// Toggle continuous play on overlay click
-overlay.addEventListener("click", () => {{
+// Overlay click handler - MULTIPLE ways to ensure it works
+overlay.addEventListener("click", function(e) {{
+    e.stopPropagation(); // Prevent event bubbling issues
+    debug("Overlay clicked!");
+    
     if (isContinuousPlayActive) {{
         stopContinuousPlay();
     }} else {{
@@ -282,22 +309,22 @@ overlay.addEventListener("click", () => {{
     }}
 }});
 
+// Also add mousedown for redundancy
+overlay.addEventListener("mousedown", function(e) {{
+    e.preventDefault(); // Prevent any default behavior
+}});
+
 function loadPlayer(box) {{
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
-    // Random thinking delay before loading (0.5-3 seconds)
-    const thinkingDelay = Math.floor(Math.random() * 2500) + 500; // 0.5-3 seconds
+    debug("Loading player for video: " + box.dataset.video);
+    
+    const thinkingDelay = Math.floor(Math.random() * 2500) + 500;
     
     setTimeout(() => {{
         const vid = box.dataset.video;
-
-        // Randomly assign viewer personality
         const viewerProfile = viewerTypes[Math.floor(Math.random() * viewerTypes.length)];
-        
-        // Natural start distribution
         let start = getRandomStart();
-
-        // Watch duration 45-61 seconds
         const duration = getRandomDuration();
         const end = start + duration;
 
@@ -323,33 +350,30 @@ function loadPlayer(box) {{
             }},
             events: {{
                 onReady: (event) => {{
-                    // Store player reference and map to box
                     loadedPlayers.push(event.target);
                     playerToBoxMap.set(event.target, box);
-                    
-                    // Update loading progress
                     updateLoadingProgress();
                     
-                    // If continuous play is active, click this video automatically
+                    debug("Player ready for video: " + vid);
+                    
+                    // If continuous play is active, click this video
                     if (isContinuousPlayActive && !playedBoxes.has(box)) {{
-                        // Small delay before clicking (1-3 seconds) for natural feel
                         setTimeout(() => {{
                             clickVideo(box);
                         }}, 1000 + Math.random() * 2000);
                     }}
                     
-                    // Set initial volume based on viewer personality
                     const initialVolume = Math.floor(Math.random() * 
                         (viewerProfile.volumeRange[1] - viewerProfile.volumeRange[0] + 1)) + 
                         viewerProfile.volumeRange[0];
                     event.target.setVolume(initialVolume);
                     
-                    // Start volume control simulation
                     simulateVolumeControl(event.target, viewerProfile);
                     
                     event.target.addEventListener('onStateChange', function(e) {{
                         if(e.data == YT.PlayerState.PLAYING) {{
-                            // Continuously force 144p every second
+                            debug("Video started playing: " + vid);
+                            
                             let qualityInterval = setInterval(() => {{
                                 try {{
                                     event.target.setPlaybackQuality('tiny');
@@ -358,7 +382,6 @@ function loadPlayer(box) {{
 
                             let remainingTime = duration;
                             let pauseCount = 0;
-                            let currentTime = start;
                             
                             const scheduleNextAction = () => {{
                                 if (remainingTime <= 0 || pauseCount >= viewerProfile.maxPauses) {{
@@ -430,22 +453,25 @@ function loadPlayer(box) {{
     }}, thinkingDelay);
 }}
 
-// Manual click on individual video
+// Manual click handler
 document.querySelectorAll(".video-box").forEach(box => {{
-    box.addEventListener("click", () => {{
-        loadPlayer(box);
+    box.addEventListener("click", function(e) {{
+        debug("Manual click on video: " + this.dataset.video);
+        loadPlayer(this);
     }});
 }});
 
-document.getElementById("shuffle-load").onclick = () => {{
+document.getElementById("shuffle-load").onclick = function() {{
+    debug("Shuffle + Load clicked");
+    
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
 
-    // Clear everything
     loadedPlayers = [];
     playerToBoxMap.clear();
     playedBoxes.clear();
-    stopContinuousPlay(); // Turn off continuous play if it was on
+    stopContinuousPlay();
+    isLoadingComplete = false;
 
     // Shuffle grid
     for(let i=boxes.length-1; i>0; i--) {{
@@ -454,25 +480,24 @@ document.getElementById("shuffle-load").onclick = () => {{
     }}
     boxes.forEach(box => grid.appendChild(box));
 
-    // Show the overlay and hint IMMEDIATELY
+    // Show overlay
     overlay.classList.add("active");
     hint.style.display = "block";
-    hint.innerHTML = "👆 Click once - videos will play automatically as they load";
+    hint.innerHTML = "👆 Click here to start playing";
 
-    // Reset progress display
     updateLoadingProgress();
 
-    // Start sequential loading with irregular spacing (1-8 seconds)
+    // Start loading
     let delay = 0;
     boxes.forEach(box => {{
-        let randomDelay = 1000 + Math.random() * 7000; // 1-8s
+        let randomDelay = 1000 + Math.random() * 7000;
         setTimeout(() => {{
             loadPlayer(box);
         }}, delay);
         delay += randomDelay;
     }});
     
-    console.log(`Scheduled ${{boxes.length}} videos to load over ~${{Math.round(delay/1000)}} seconds`);
+    debug(`Scheduled ${{boxes.length}} videos to load`);
 }};
 </script>
 """
