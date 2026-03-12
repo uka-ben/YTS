@@ -61,7 +61,7 @@ top:0;
 left:0;
 width:100%;
 height:100%;
-background:rgba(255,0,0,0.05);
+background:transparent;
 z-index:9999;
 cursor:pointer;
 display:none;
@@ -71,7 +71,7 @@ pointer-events:auto;
 display:block;
 }}
 #play-all-overlay.playing {{
-background:rgba(0,255,0,0.05);
+background:transparent;
 }}
 .play-all-hint {{
 position:fixed;
@@ -86,6 +86,21 @@ font-weight:bold;
 color:#333;
 border:3px solid #ff0000;
 font-size:16px;
+transition:opacity 0.3s;
+}}
+.play-all-hint.loading {{
+opacity:0.7;
+border-color:#888;
+}}
+.play-all-hint.ready {{
+opacity:1;
+border-color:#ff0000;
+animation:pulse 2s infinite;
+}}
+@keyframes pulse {{
+0% {{ transform: scale(1); }}
+50% {{ transform: scale(1.05); }}
+100% {{ transform: scale(1); }}
 }}
 .loading-status {{
 margin-left:20px;
@@ -120,6 +135,7 @@ z-index:10001;
 max-width:300px;
 max-height:200px;
 overflow:auto;
+display:none;
 }}
 </style>
 
@@ -132,7 +148,7 @@ overflow:auto;
 </div>
 
 <div id="play-all-overlay"></div>
-<div class="play-all-hint" id="play-all-hint" style="display:none;">👆 Click here to start playing</div>
+<div class="play-all-hint loading" id="play-all-hint" style="display:none;">⏳ Loading videos... please wait</div>
 <div class="debug-console" id="debug-console"></div>
 
 <div id="video-grid">
@@ -143,16 +159,16 @@ overflow:auto;
 
 <script>
 let YT_API_ready = false;
-let loadedPlayers = new Map(); // Map box -> player
+let loadedPlayers = new Map();
 let overlay = document.getElementById("play-all-overlay");
 let hint = document.getElementById("play-all-hint");
 let loadingStatus = document.getElementById("loading-status");
 let loadingProgress = document.getElementById("loading-progress");
 let debugConsole = document.getElementById("debug-console");
 let totalVideos = document.querySelectorAll(".video-box").length;
-let isContinuousPlayActive = false; 
-let playedBoxes = new Set(); 
 let isLoadingComplete = false;
+let isPlayingActive = false;
+let playedBoxes = new Set();
 
 function debug(msg) {{
     console.log(msg);
@@ -173,14 +189,21 @@ const viewerTypes = [
 ];
 
 function updateLoadingProgress() {{
-    loadedCount = document.querySelectorAll(".video-box.loaded").length;
+    let loadedCount = document.querySelectorAll(".video-box.loaded").length;
     loadingStatus.textContent = `${{loadedCount}}/${{totalVideos}} loaded`;
     let percent = (loadedCount / totalVideos) * 100;
     loadingProgress.style.width = percent + "%";
     
+    // Check if all videos are loaded
     if (loadedCount === totalVideos && !isLoadingComplete) {{
         isLoadingComplete = true;
-        debug("All videos loaded");
+        debug("All videos loaded - ready to play!");
+        
+        // Update hint and overlay for play mode
+        hint.innerHTML = "🎬 Click here to start playing (random order)";
+        hint.classList.remove("loading");
+        hint.classList.add("ready");
+        overlay.classList.add("active");
     }}
 }}
 
@@ -234,14 +257,12 @@ function simulateVolumeControl(player, viewerProfile) {{
 function playVideo(box) {{
     if (!box) return;
     
-    // Get the player for this box
     const player = loadedPlayers.get(box);
     
     if (player) {{
-        debug("Playing video: " + box.dataset.video);
+        debug("Playing video in random order: " + box.dataset.video);
         player.playVideo();
         
-        // Visual feedback
         box.style.transform = 'scale(0.95)';
         box.style.transition = 'transform 0.1s';
         setTimeout(() => {{
@@ -249,52 +270,73 @@ function playVideo(box) {{
         }}, 100);
         
         return true;
-    }} else {{
-        debug("ERROR: No player found for box");
-        return false;
     }}
+    return false;
 }}
 
-function startContinuousPlay() {{
-    if (!isContinuousPlayActive) {{
-        isContinuousPlayActive = true;
-        overlay.classList.add("playing");
-        hint.innerHTML = "▶️ Playing videos as they load... (click to stop)";
-        debug("Started continuous play mode");
-        
-        // Play any already loaded videos
-        const loadedBoxes = Array.from(document.querySelectorAll(".video-box.loaded"));
-        debug(`Found ${{loadedBoxes.length}} loaded videos to play`);
-        
-        let delay = 0;
-        loadedBoxes.forEach(box => {{
-            if (!playedBoxes.has(box)) {{
-                playedBoxes.add(box); // Mark as played
-                setTimeout(() => {{
-                    playVideo(box);
-                }}, delay);
-                delay += 2000 + Math.random() * 3000; // 2-5 seconds between plays
-            }}
-        }});
+function startRandomPlayback() {{
+    if (isPlayingActive || !isLoadingComplete) return;
+    
+    isPlayingActive = true;
+    overlay.classList.remove("active");
+    hint.innerHTML = "▶️ Playing in random order...";
+    hint.classList.remove("ready");
+    debug("Starting RANDOM playback order");
+    
+    // Get all loaded boxes and SHUFFLE them for random order
+    const allBoxes = Array.from(document.querySelectorAll(".video-box.loaded"));
+    const shuffledBoxes = [...allBoxes];
+    
+    // Fisher-Yates shuffle for true randomness
+    for (let i = shuffledBoxes.length - 1; i > 0; i--) {{
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledBoxes[i], shuffledBoxes[j]] = [shuffledBoxes[j], shuffledBoxes[i]];
     }}
+    
+    debug(`Playing ${{shuffledBoxes.length}} videos in RANDOM order`);
+    
+    // Calculate how many videos go in each timing group (20%, 30%, 50%)
+    const totalVids = shuffledBoxes.length;
+    const earlyCount = Math.floor(totalVids * 0.2); // 20% - 0-12 seconds
+    const mediumCount = Math.floor(totalVids * 0.3); // 30% - 12-30 seconds
+    // Remaining 50% go to late group - 30-60 seconds
+    
+    debug(`Timing groups: Early: ${{earlyCount}} (0-12s), Medium: ${{mediumCount}} (12-30s), Late: ${{totalVids - earlyCount - mediumCount}} (30-60s)`);
+    
+    // Play videos with new timing distribution
+    shuffledBoxes.forEach((box, index) => {{
+        // Mark as played
+        playedBoxes.add(box);
+        
+        // Assign delay based on which group this index falls into
+        let randomDelay;
+        if (index < earlyCount) {{
+            // Early group: 0-12 seconds
+            randomDelay = Math.random() * 12000; // 0-12 seconds
+            debug(`Video ${{index+1}} assigned to EARLY group: ${{Math.round(randomDelay/1000)}}s delay`);
+        }} else if (index < earlyCount + mediumCount) {{
+            // Medium group: 12-30 seconds
+            randomDelay = 12000 + Math.random() * 18000; // 12-30 seconds
+            debug(`Video ${{index+1}} assigned to MEDIUM group: ${{Math.round(randomDelay/1000)}}s delay`);
+        }} else {{
+            // Late group: 30-60 seconds
+            randomDelay = 30000 + Math.random() * 30000; // 30-60 seconds
+            debug(`Video ${{index+1}} assigned to LATE group: ${{Math.round(randomDelay/1000)}}s delay`);
+        }}
+        
+        setTimeout(() => {{
+            playVideo(box);
+        }}, randomDelay);
+    }});
 }}
 
-function stopContinuousPlay() {{
-    isContinuousPlayActive = false;
-    overlay.classList.remove("playing");
-    hint.innerHTML = "👆 Click here to start playing";
-    debug("Stopped continuous play mode");
-}}
-
-// Overlay click handler
+// Overlay click handler - starts random playback
 overlay.addEventListener("click", function(e) {{
     e.stopPropagation();
-    debug("Overlay clicked!");
+    debug("Overlay clicked - starting random playback");
     
-    if (isContinuousPlayActive) {{
-        stopContinuousPlay();
-    }} else {{
-        startContinuousPlay();
+    if (isLoadingComplete && !isPlayingActive) {{
+        startRandomPlayback();
     }}
 }});
 
@@ -303,7 +345,8 @@ function loadPlayer(box) {{
 
     debug("Loading player for video: " + box.dataset.video);
     
-    const thinkingDelay = Math.floor(Math.random() * 2500) + 500;
+    // Updated loading delay: 1-12 seconds (1000-12000ms)
+    const thinkingDelay = 1000 + Math.random() * 11000; // 1-12 seconds
     
     setTimeout(() => {{
         const vid = box.dataset.video;
@@ -334,7 +377,6 @@ function loadPlayer(box) {{
             }},
             events: {{
                 onReady: (event) => {{
-                    // Store player with box as key
                     loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
                     
@@ -346,14 +388,6 @@ function loadPlayer(box) {{
                     event.target.setVolume(initialVolume);
                     
                     simulateVolumeControl(event.target, viewerProfile);
-                    
-                    // If continuous play is active, play this video
-                    if (isContinuousPlayActive && !playedBoxes.has(box)) {{
-                        playedBoxes.add(box);
-                        setTimeout(() => {{
-                            playVideo(box);
-                        }}, 1000 + Math.random() * 2000);
-                    }}
                     
                     event.target.addEventListener('onStateChange', function(e) {{
                         if(e.data == YT.PlayerState.PLAYING) {{
@@ -438,20 +472,18 @@ function loadPlayer(box) {{
     }}, thinkingDelay);
 }}
 
-// Manual click handler - NOW JUST PLAYS THE VIDEO, doesn't reload
+// Manual click handler
 document.querySelectorAll(".video-box").forEach(box => {{
     box.addEventListener("click", function(e) {{
         e.stopPropagation();
         debug("Manual click on video: " + this.dataset.video);
         
         if (this.classList.contains("loaded")) {{
-            // Video is loaded, just play it
             if (!playedBoxes.has(this)) {{
                 playedBoxes.add(this);
                 playVideo(this);
             }}
         }} else {{
-            // Video not loaded yet, load it first
             loadPlayer(this);
         }}
     }});
@@ -465,8 +497,8 @@ document.getElementById("shuffle-load").onclick = function() {{
 
     loadedPlayers.clear();
     playedBoxes.clear();
-    stopContinuousPlay();
     isLoadingComplete = false;
+    isPlayingActive = false;
 
     // Shuffle grid
     for(let i=boxes.length-1; i>0; i--) {{
@@ -475,24 +507,26 @@ document.getElementById("shuffle-load").onclick = function() {{
     }}
     boxes.forEach(box => grid.appendChild(box));
 
-    // Show overlay
-    overlay.classList.add("active");
+    // Show loading hint
     hint.style.display = "block";
-    hint.innerHTML = "👆 Click here to start playing";
+    hint.innerHTML = "⏳ Loading videos... please wait";
+    hint.classList.add("loading");
+    hint.classList.remove("ready");
+    overlay.classList.remove("active");
 
     updateLoadingProgress();
 
-    // Start loading
+    // Start loading with 1-12 second delays between each
     let delay = 0;
     boxes.forEach(box => {{
-        let randomDelay = 1000 + Math.random() * 7000;
+        let randomDelay = 1000 + Math.random() * 11000; // 1-12 seconds
         setTimeout(() => {{
             loadPlayer(box);
         }}, delay);
         delay += randomDelay;
     }});
     
-    debug(`Scheduled ${{boxes.length}} videos to load`);
+    debug(`Scheduled ${{boxes.length}} videos to load over ~${{Math.round(delay/1000)}} seconds (1-12s between loads)`);
 }};
 </script>
 """
