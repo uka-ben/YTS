@@ -2,12 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-#video_id = "5ow-Zk_2IG8"
-import streamlit as st
-
-#st.set_page_config(layout="wide")
-
-video_id = "XuEAtQUrhkc"
+video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -561,7 +556,6 @@ function loadPlayer(box) {{
                             scheduleNextAction();
                         }} else if (e.data == YT.PlayerState.PAUSED) {{
                             debug("Video paused: " + vid);
-                            // Clear end timer while paused
                             if (videoEndTimer) {{
                                 clearTimeout(videoEndTimer);
                                 videoEndTimer = null;
@@ -570,6 +564,15 @@ function loadPlayer(box) {{
                             debug("Video ended naturally: " + vid);
                             destroyVideo(box, event.target);
                             if (qualityInterval) clearInterval(qualityInterval);
+                        }} else if (e.data == YT.PlayerState.UNSTARTED) {{
+                            // Safety check: if video is unstarted but already past end time
+                            event.target.getCurrentTime().then((currentTime) => {{
+                                if (currentTime >= end) {{
+                                    debug("Video past end time on unstarted: " + vid);
+                                    destroyVideo(box, event.target);
+                                    if (qualityInterval) clearInterval(qualityInterval);
+                                }}
+                            }});
                         }}
                     }});
                 }}
