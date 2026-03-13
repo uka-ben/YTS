@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 # 20 videos (same video repeated for demo)
-video_id = "ghxwcXWT-LQ"
+video_id = "vKqRZXGBdxo"
 video_ids = [video_id] * 20
 
 # Create thumbnail blocks
