@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 # Video repeated 20 times
-video_id = "JZYnS6ypa2g"
+video_id = "CvrELdc92dE"
 video_ids = [video_id] * 20
 
 # Generate HTML per video
