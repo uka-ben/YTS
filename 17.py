@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "LxTZnjraVrM"
+video_id = "JZYnS6ypa2g"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -341,32 +341,6 @@ function playVideo(box) {{
     return false;
 }}
 
-function simulateHumanClick(box) {{
-    if (!box) return;
-    
-    // Create a REAL mouse click event
-    const rect = box.getBoundingClientRect();
-    const clickEvent = new MouseEvent('click', {{
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + rect.width/2,
-        clientY: rect.top + rect.height/2
-    }});
-    
-    // Dispatch the click on the box
-    box.dispatchEvent(clickEvent);
-    
-    // Visual feedback
-    box.style.transform = 'scale(0.95)';
-    box.style.transition = 'transform 0.1s';
-    setTimeout(() => {{
-        box.style.transform = 'scale(1)';
-    }}, 100);
-    
-    debug("Simulated human click on video: " + box.dataset.video);
-}}
-
 function startRandomPlayback() {{
     if (isPlayingActive || !isLoadingComplete) return;
     
@@ -374,7 +348,7 @@ function startRandomPlayback() {{
     overlay.classList.remove("active");
     hint.innerHTML = "▶️ Playing in random order...";
     hint.classList.remove("ready");
-    debug("Starting RANDOM playback order with human clicks");
+    debug("Starting RANDOM playback order");
     
     const allBoxes = Array.from(document.querySelectorAll(".video-box.loaded"));
     const shuffledBoxes = [...allBoxes];
@@ -392,42 +366,40 @@ function startRandomPlayback() {{
     
     debug(`Timing groups: Early: ${{earlyCount}} (0-12s), Medium: ${{mediumCount}} (12-30s), Late: ${{totalVids - earlyCount - mediumCount}} (30-60s)`);
     
-    // Track cumulative delay to ensure 2-12 second gaps between clicks
+    // Track cumulative delay to ensure 2-6 second gaps between starts
     let cumulativeDelay = 0;
     
     shuffledBoxes.forEach((box, index) => {{
         playedBoxes.add(box);
         
-        // Base delay from timing group (when they START watching)
+        // Base delay from timing group
         let baseDelay;
         if (index < earlyCount) {{
             baseDelay = Math.random() * 12000; // 0-12 seconds
-            debug(`Video ${{index+1}} assigned to EARLY group: will click after ${{Math.round(baseDelay/1000)}}s base delay`);
+            debug(`Video ${{index+1}} assigned to EARLY group: base delay ${{Math.round(baseDelay/1000)}}s`);
         }} else if (index < earlyCount + mediumCount) {{
             baseDelay = 12000 + Math.random() * 18000; // 12-30 seconds
-            debug(`Video ${{index+1}} assigned to MEDIUM group: will click after ${{Math.round(baseDelay/1000)}}s base delay`);
+            debug(`Video ${{index+1}} assigned to MEDIUM group: base delay ${{Math.round(baseDelay/1000)}}s`);
         }} else {{
             baseDelay = 30000 + Math.random() * 30000; // 30-60 seconds
-            debug(`Video ${{index+1}} assigned to LATE group: will click after ${{Math.round(baseDelay/1000)}}s base delay`);
+            debug(`Video ${{index+1}} assigned to LATE group: base delay ${{Math.round(baseDelay/1000)}}s`);
         }}
         
-        // Add cumulative delay to ensure 2-12 second gaps between clicks
+        // Add cumulative delay to ensure 2-6 second gaps
         const finalDelay = cumulativeDelay + baseDelay;
         
-        // Update cumulative delay with 2-12 second gap for next click
-        const gapBetweenClicks = 2000 + Math.random() * 10000; // 2-12 seconds
-        cumulativeDelay += gapBetweenClicks;
-        debug(`Next click will be after ${{Math.round(gapBetweenClicks/1000)}}s gap`);
+        // Update cumulative delay with 2-6 second gap for next video
+        cumulativeDelay += 2000 + Math.random() * 4000; // 2-6 seconds
         
         setTimeout(() => {{
-            simulateHumanClick(box);
+            playVideo(box);
         }}, finalDelay);
     }});
 }}
 
 overlay.addEventListener("click", function(e) {{
     e.stopPropagation();
-    debug("Overlay clicked - starting random playback with human clicks");
+    debug("Overlay clicked - starting random playback");
     
     if (isLoadingComplete && !isPlayingActive) {{
         startRandomPlayback();
@@ -501,11 +473,13 @@ function loadPlayer(box) {{
                             let pauseCount = 0;
                             
                             const scheduleNextAction = () => {{
+                                // Check if we should continue
                                 if (pauseCount >= viewerProfile.maxPauses || destroyTriggered) return;
                                 
                                 const timeUntilAction = Math.floor(Math.random() * 11) + 5;
                                 
                                 setTimeout(() => {{
+                                    // Before action, check current time against end
                                     event.target.getCurrentTime().then((currentTime) => {{
                                         if (currentTime >= end) {{
                                             debug("Video reached end time naturally: " + vid);
@@ -523,6 +497,7 @@ function loadPlayer(box) {{
                                             pauseCount++;
                                             
                                             setTimeout(() => {{
+                                                // Check time after pause
                                                 event.target.getCurrentTime().then((currentTime) => {{
                                                     if (currentTime >= end) {{
                                                         debug("Video reached end after pause: " + vid);
@@ -538,6 +513,7 @@ function loadPlayer(box) {{
                                         }} else {{
                                             event.target.getCurrentTime().then((currentVideoTime) => {{
                                                 const newTime = simulateSkip(currentVideoTime, duration, viewerProfile);
+                                                // Don't skip past end
                                                 if (newTime < end) {{
                                                     event.target.seekTo(newTime, true);
                                                     scheduleNextAction();
@@ -553,8 +529,10 @@ function loadPlayer(box) {{
                                 }}, timeUntilAction * 1000);
                             }};
                             
+                            // Start the action scheduling
                             scheduleNextAction();
                             
+                            // Also check periodically if we've reached the end
                             const endCheckInterval = setInterval(() => {{
                                 if (destroyTriggered) {{
                                     clearInterval(endCheckInterval);
@@ -579,6 +557,7 @@ function loadPlayer(box) {{
                             if (qualityInterval) clearInterval(qualityInterval);
                             destroyTriggered = true;
                         }} else if (e.data == YT.PlayerState.UNSTARTED) {{
+                            // Check if we're already past end time
                             event.target.getCurrentTime().then((currentTime) => {{
                                 if (currentTime >= end) {{
                                     debug("Video past end time on unstarted: " + vid);
