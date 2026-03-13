@@ -4,7 +4,7 @@ st.set_page_config(layout="wide")
 
 # 20 videos (same video repeated for demo)
 video_id = "7Dae1_bPEts"
-video_ids = [video_id] * 20
+video_ids = [video_id] * 50
 
 # Create thumbnail blocks
 html_blocks = []
