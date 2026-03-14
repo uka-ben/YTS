@@ -3,6 +3,7 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 video_id = "LxTZnjraVrM"
+
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -230,10 +231,11 @@ function onYouTubeIframeAPIReady() {{
     debug("YouTube API ready");
 }}
 
+// Updated viewer personalities - removed skipChance
 const viewerTypes = [
-    {{ type: "binger", pauseChance: 0.1, maxPauses: 1, skipChance: 0.2, volumeRange: [70, 100] }},
-    {{ type: "distracted", pauseChance: 0.4, maxPauses: 3, skipChance: 0.6, volumeRange: [30, 70] }},
-    {{ type: "skimmer", pauseChance: 0.2, maxPauses: 2, skipChance: 0.8, volumeRange: [50, 85] }}
+    {{ type: "binger", pauseChance: 0.1, maxPauses: 1, volumeRange: [70, 100] }},
+    {{ type: "distracted", pauseChance: 0.4, maxPauses: 3, volumeRange: [30, 70] }},
+    {{ type: "skimmer", pauseChance: 0.2, maxPauses: 2, volumeRange: [50, 85] }}
 ];
 
 function updateLoadingProgress() {{
@@ -260,28 +262,14 @@ function getRandomStart() {{
 }}
 
 function getRandomDuration() {{
-    return Math.floor(Math.random() * 17) + 45;
+    return Math.floor(Math.random() * 15) + 36; // 36-50 seconds
 }}
 
 function getRandomPause() {{
-    return Math.floor(Math.random() * 5) + 2;
+    return Math.floor(Math.random() * 5) + 2; // 2-6 seconds
 }}
 
-function simulateSkip(currentTime, duration, viewerProfile) {{
-    const numSkips = Math.floor(Math.random() * 4);
-    let newTime = currentTime;
-    
-    for (let i = 0; i < numSkips; i++) {{
-        if (Math.random() < viewerProfile.skipChance) {{
-            const skipDirection = Math.random() < 0.6 ? 10 : -10;
-            const skipVariation = Math.floor(Math.random() * 7) - 3;
-            const skipAmount = skipDirection + skipVariation;
-            newTime += skipAmount;
-            newTime = Math.max(0, Math.min(newTime, duration - 5));
-        }}
-    }}
-    return newTime;
-}}
+// REMOVED: simulateSkip function completely
 
 function simulateVolumeControl(player, viewerProfile) {{
     const numVolumeChanges = Math.floor(Math.random() * 3) + 1;
@@ -300,7 +288,7 @@ function simulateVolumeControl(player, viewerProfile) {{
 }}
 
 function destroyVideo(box, player) {{
-    debug("Destroying video: " + box.dataset.video);
+    debug("🔥 DESTROYING video: " + box.dataset.video);
     
     // Stop the video if it's playing
     try {{
@@ -312,11 +300,13 @@ function destroyVideo(box, player) {{
     
     // Fade out and remove
     box.style.opacity = '0';
+    box.style.transition = 'opacity 1s';
+    
     setTimeout(() => {{
         if (box.parentNode) {{
             box.remove();
             updateLoadingProgress();
-            debug("Video removed from grid");
+            debug("✅ Video removed from grid - fadeout complete");
         }}
     }}, 1000);
 }}
@@ -327,7 +317,7 @@ function playVideo(box) {{
     const player = loadedPlayers.get(box);
     
     if (player) {{
-        debug("Playing video: " + box.dataset.video);
+        debug("▶️ Playing video: " + box.dataset.video);
         player.playVideo();
         
         box.style.transform = 'scale(0.95)';
@@ -346,54 +336,39 @@ function startRandomPlayback() {{
     
     isPlayingActive = true;
     overlay.classList.remove("active");
-    hint.innerHTML = "▶️ Playing in random order...";
+    hint.innerHTML = "▶️ Playing in random order with 2-6s gaps...";
     hint.classList.remove("ready");
-    debug("Starting RANDOM playback order");
+    debug("Starting RANDOM playback order with 2-6s gaps between videos (no skips)");
     
     const allBoxes = Array.from(document.querySelectorAll(".video-box.loaded"));
     const shuffledBoxes = [...allBoxes];
     
+    // Fisher-Yates shuffle
     for (let i = shuffledBoxes.length - 1; i > 0; i--) {{
         const j = Math.floor(Math.random() * (i + 1));
         [shuffledBoxes[i], shuffledBoxes[j]] = [shuffledBoxes[j], shuffledBoxes[i]];
     }}
     
-    debug(`Playing ${{shuffledBoxes.length}} videos in RANDOM order`);
+    debug(`Playing ${{shuffledBoxes.length}} videos in RANDOM order with 2-6s gaps`);
     
-    const totalVids = shuffledBoxes.length;
-    const earlyCount = Math.floor(totalVids * 0.2);
-    const mediumCount = Math.floor(totalVids * 0.3);
-    
-    debug(`Timing groups: Early: ${{earlyCount}} (0-12s), Medium: ${{mediumCount}} (12-30s), Late: ${{totalVids - earlyCount - mediumCount}} (30-60s)`);
-    
-    // Track cumulative delay to ensure 2-6 second gaps between starts
-    let cumulativeDelay = 0;
+    // Use only start gaps
+    let currentDelay = 0;
     
     shuffledBoxes.forEach((box, index) => {{
         playedBoxes.add(box);
         
-        // Base delay from timing group
-        let baseDelay;
-        if (index < earlyCount) {{
-            baseDelay = Math.random() * 12000; // 0-12 seconds
-            debug(`Video ${{index+1}} assigned to EARLY group: base delay ${{Math.round(baseDelay/1000)}}s`);
-        }} else if (index < earlyCount + mediumCount) {{
-            baseDelay = 12000 + Math.random() * 18000; // 12-30 seconds
-            debug(`Video ${{index+1}} assigned to MEDIUM group: base delay ${{Math.round(baseDelay/1000)}}s`);
+        if (index === 0) {{
+            currentDelay = 2000 + Math.random() * 2000; // 2-4 seconds for first video
+            debug(`Video ${{index+1}}: first video delay ${{Math.round(currentDelay/1000)}}s`);
         }} else {{
-            baseDelay = 30000 + Math.random() * 30000; // 30-60 seconds
-            debug(`Video ${{index+1}} assigned to LATE group: base delay ${{Math.round(baseDelay/1000)}}s`);
+            const gapDelay = 2000 + Math.random() * 4000; // 2-6 seconds
+            currentDelay += gapDelay;
+            debug(`Video ${{index+1}}: +${{Math.round(gapDelay/1000)}}s gap = ${{Math.round(currentDelay/1000)}}s total delay`);
         }}
-        
-        // Add cumulative delay to ensure 2-6 second gaps
-        const finalDelay = cumulativeDelay + baseDelay;
-        
-        // Update cumulative delay with 2-6 second gap for next video
-        cumulativeDelay += 2000 + Math.random() * 4000; // 2-6 seconds
         
         setTimeout(() => {{
             playVideo(box);
-        }}, finalDelay);
+        }}, currentDelay);
     }});
 }}
 
@@ -426,6 +401,8 @@ function loadPlayer(box) {{
         const playerDiv = document.createElement("div");
         box.appendChild(playerDiv);
 
+        debug(`Creating player: start=${{start}}s, duration=${{duration}}s, end=${{end}}s, personality=${{viewerProfile.type}}`);
+        
         const player = new YT.Player(playerDiv, {{
             height: '100%',
             width: '100%',
@@ -445,7 +422,7 @@ function loadPlayer(box) {{
                     loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
                     
-                    debug("Player ready for video: " + vid + " (duration: " + duration + "s, end: " + end + "s)");
+                    debug("Player ready for video: " + vid + " (start: " + start + "s, duration: " + duration + "s, end: " + end + "s, type: " + viewerProfile.type + ")");
                     
                     const initialVolume = Math.floor(Math.random() * 
                         (viewerProfile.volumeRange[1] - viewerProfile.volumeRange[0] + 1)) + 
@@ -456,10 +433,11 @@ function loadPlayer(box) {{
                     
                     let qualityInterval = null;
                     let destroyTriggered = false;
+                    let endCheckInterval = null;
                     
                     event.target.addEventListener('onStateChange', function(e) {{
                         if(e.data == YT.PlayerState.PLAYING) {{
-                            debug("Video started playing: " + vid);
+                            debug("▶️ Video started playing: " + vid + " (" + viewerProfile.type + ")");
                             
                             if (qualityInterval) clearInterval(qualityInterval);
                             
@@ -472,75 +450,65 @@ function loadPlayer(box) {{
                             
                             let pauseCount = 0;
                             
-                            const scheduleNextAction = () => {{
-                                // Check if we should continue
+                            // SIMPLIFIED: Only pauses now, no skips
+                            const scheduleNextPause = () => {{
                                 if (pauseCount >= viewerProfile.maxPauses || destroyTriggered) return;
                                 
-                                const timeUntilAction = Math.floor(Math.random() * 11) + 5;
+                                // Random time until next pause (5-15 seconds)
+                                const timeUntilPause = Math.floor(Math.random() * 11) + 5;
                                 
                                 setTimeout(() => {{
-                                    // Before action, check current time against end
                                     event.target.getCurrentTime().then((currentTime) => {{
                                         if (currentTime >= end) {{
-                                            debug("Video reached end time naturally: " + vid);
+                                            debug("⏱️ Video reached end time: " + vid);
                                             destroyVideo(box, event.target);
                                             if (qualityInterval) clearInterval(qualityInterval);
+                                            if (endCheckInterval) clearInterval(endCheckInterval);
                                             destroyTriggered = true;
                                             return;
                                         }}
                                         
-                                        const action = Math.random() < viewerProfile.pauseChance ? 'pause' : 'skip';
-                                        
-                                        if (action === 'pause' && pauseCount < viewerProfile.maxPauses) {{
+                                        // Check if we should pause based on personality
+                                        if (Math.random() < viewerProfile.pauseChance) {{
                                             const pauseDuration = getRandomPause();
                                             event.target.pauseVideo();
                                             pauseCount++;
+                                            debug(`⏸️ Video paused for ${{pauseDuration}}s (${{viewerProfile.type}}) - pause ${{pauseCount}}/${{viewerProfile.maxPauses}}`);
                                             
                                             setTimeout(() => {{
-                                                // Check time after pause
                                                 event.target.getCurrentTime().then((currentTime) => {{
                                                     if (currentTime >= end) {{
-                                                        debug("Video reached end after pause: " + vid);
+                                                        debug("⏱️ Video reached end after pause: " + vid);
                                                         destroyVideo(box, event.target);
                                                         if (qualityInterval) clearInterval(qualityInterval);
+                                                        if (endCheckInterval) clearInterval(endCheckInterval);
                                                         destroyTriggered = true;
                                                     }} else {{
                                                         event.target.playVideo();
-                                                        scheduleNextAction();
+                                                        scheduleNextPause();
                                                     }}
                                                 }});
                                             }}, pauseDuration * 1000);
                                         }} else {{
-                                            event.target.getCurrentTime().then((currentVideoTime) => {{
-                                                const newTime = simulateSkip(currentVideoTime, duration, viewerProfile);
-                                                // Don't skip past end
-                                                if (newTime < end) {{
-                                                    event.target.seekTo(newTime, true);
-                                                    scheduleNextAction();
-                                                }} else {{
-                                                    debug("Skip would go past end, ending video: " + vid);
-                                                    destroyVideo(box, event.target);
-                                                    if (qualityInterval) clearInterval(qualityInterval);
-                                                    destroyTriggered = true;
-                                                }}
-                                            }});
+                                            // No pause this time, just continue
+                                            scheduleNextPause();
                                         }}
                                     }});
-                                }}, timeUntilAction * 1000);
+                                }}, timeUntilPause * 1000);
                             }};
                             
-                            // Start the action scheduling
-                            scheduleNextAction();
+                            // Start the pause scheduling
+                            scheduleNextPause();
                             
-                            // Also check periodically if we've reached the end
-                            const endCheckInterval = setInterval(() => {{
+                            // Check periodically if we've reached the end
+                            endCheckInterval = setInterval(() => {{
                                 if (destroyTriggered) {{
                                     clearInterval(endCheckInterval);
                                     return;
                                 }}
                                 event.target.getCurrentTime().then((currentTime) => {{
                                     if (currentTime >= end) {{
-                                        debug("Video reached end time (periodic check): " + vid);
+                                        debug("⏱️ Video reached end time (periodic check): " + vid);
                                         destroyVideo(box, event.target);
                                         if (qualityInterval) clearInterval(qualityInterval);
                                         clearInterval(endCheckInterval);
@@ -550,19 +518,20 @@ function loadPlayer(box) {{
                             }}, 1000);
                             
                         }} else if (e.data == YT.PlayerState.PAUSED) {{
-                            debug("Video paused: " + vid);
+                            debug("⏸️ Video paused: " + vid);
                         }} else if (e.data == YT.PlayerState.ENDED) {{
-                            debug("Video ended naturally: " + vid);
+                            debug("⏱️ Video ended naturally: " + vid);
                             destroyVideo(box, event.target);
                             if (qualityInterval) clearInterval(qualityInterval);
+                            if (endCheckInterval) clearInterval(endCheckInterval);
                             destroyTriggered = true;
                         }} else if (e.data == YT.PlayerState.UNSTARTED) {{
-                            // Check if we're already past end time
                             event.target.getCurrentTime().then((currentTime) => {{
                                 if (currentTime >= end) {{
-                                    debug("Video past end time on unstarted: " + vid);
+                                    debug("⏱️ Video past end time on unstarted: " + vid);
                                     destroyVideo(box, event.target);
                                     if (qualityInterval) clearInterval(qualityInterval);
+                                    if (endCheckInterval) clearInterval(endCheckInterval);
                                     destroyTriggered = true;
                                 }}
                             }});
@@ -577,7 +546,7 @@ function loadPlayer(box) {{
 document.querySelectorAll(".video-box").forEach(box => {{
     box.addEventListener("click", function(e) {{
         e.stopPropagation();
-        debug("Manual click on video: " + this.dataset.video);
+        debug("👆 Manual click on video: " + this.dataset.video);
         
         if (this.classList.contains("loaded")) {{
             if (!playedBoxes.has(this)) {{
@@ -591,12 +560,12 @@ document.querySelectorAll(".video-box").forEach(box => {{
 }});
 
 document.getElementById("shuffle-load").onclick = function() {{
-    debug("Shuffle + Load clicked");
+    debug("🔄 Shuffle + Load clicked");
     
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
 
-    // Destroy all existing players first
+    // Destroy all existing players
     for (let [box, player] of loadedPlayers) {{
         try {{
             player.destroy();
@@ -626,6 +595,7 @@ document.getElementById("shuffle-load").onclick = function() {{
 
     updateLoadingProgress();
 
+    // Load videos with 1-12s delays
     let delay = 0;
     boxes.forEach(box => {{
         let randomDelay = 1000 + Math.random() * 11000;
