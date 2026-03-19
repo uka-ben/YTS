@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "ZYcZ_nBLG6Y"
+video_id = "ZYcZ_nBLG6Y"  # Using your Version 7 video ID
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -57,231 +57,192 @@ margin-bottom:10px;
 {''.join(html_blocks)}
 </div>
 
-<script src="https://www.youtube.com/iframe_api"></script>
-
 <script>
-let YT_API_ready = false;
-
-function onYouTubeIframeAPIReady() {{
-    YT_API_ready = true;
-}}
-
 function loadPlayer(box) {{
-    if(box.classList.contains("loaded") || !YT_API_ready) return;
+    if(box.classList.contains("loaded")) return
 
-    const vid = box.dataset.video;
-    const boxId = 'box_' + Math.random().toString(36).substr(2, 9); // Unique ID for this box
-    console.log(`Loading video for ${{boxId}}`);
+    const vid = box.dataset.video
+    const boxId = 'box_' + Math.random().toString(36).substr(2, 9) // Unique ID
 
-    // Mixed start strategy
-    let start;
+    /* mixed start strategy */
+    let start
     if(Math.random() < 0.7){{
-        start = 0;
-    }} else {{
-        start = Math.floor(Math.random() * 200);
+        start = 0
+    }}else{{
+        start = Math.floor(Math.random()*200)
     }}
 
-    const targetDuration = Math.floor(Math.random()*(46-35+1)) + 35;
-    const end = start + targetDuration;
+    const targetDuration = Math.floor(Math.random()*(46-35+1))+35  // Target play time
+    const end = start + targetDuration
 
-    box.innerHTML = '';
-    box.classList.add("loaded");
-    box.setAttribute('data-box-id', boxId); // Tag the box with unique ID
+    const iframe = document.createElement("iframe")
+    iframe.src =
+    "https://www.youtube.com/embed/"+vid+
+    "?autoplay=0"+
+    "&controls=1"+
+    "&rel=0"+
+    "&modestbranding=1"+
+    "&vq=tiny"+
+    "&start="+start+
+    "&end="+end
 
-    const playerDiv = document.createElement("div");
-    playerDiv.setAttribute('data-player-id', boxId); // Tag player div
-    box.appendChild(playerDiv);
+    iframe.allow="autoplay"
+    iframe.setAttribute('data-box-id', boxId)
+    
+    box.innerHTML=""
+    box.appendChild(iframe)
+    box.classList.add("loaded")
+    box.setAttribute('data-box-id', boxId)
 
-    // Create unique tracking variables for THIS video only
-    let actualPlayedTime = 0;
-    let qualityInterval = null;
-    let playbackInterval = null;
-    let isDestroyed = false;
-    let playerReady = false;
+    let actualPlayedTime = 0
+    let playbackInterval = null
+    let isDestroyed = false
+    let qualityInterval = null
 
-    const player = new YT.Player(playerDiv, {{
-        height: '100%',
-        width: '100%',
-        videoId: vid,
-        playerVars: {{
-            autoplay: 0,
-            controls: 1,
-            rel: 0,
-            modestbranding: 1,
-            playsinline: 1,
-            start: start,
-            end: end,
-            vq: 'tiny'
-        }},
-        events: {{
-            onReady: (event) => {{
-                playerReady = true;
-                console.log(`Player ready for ${{boxId}}`);
-                
-                event.target.addEventListener('onStateChange', function(e) {{
-                    // Don't do anything if already destroyed
-                    if (isDestroyed) return;
-                    
-                    if(e.data == YT.PlayerState.PLAYING) {{
-                        console.log(`${{boxId}} started playing`);
-                        
-                        // Clear any existing intervals first with safety checks
-                        if (qualityInterval) {{
-                            clearInterval(qualityInterval);
-                            qualityInterval = null;
-                        }}
-                        if (playbackInterval) {{
-                            clearInterval(playbackInterval);
-                            playbackInterval = null;
-                        }}
-                        
-                        // Continuously force 144p every second
-                        qualityInterval = setInterval(() => {{
-                            try {{
-                                // Extra safety: check if this specific box still exists and isn't destroyed
-                                if (!isDestroyed && !box.classList.contains('destroyed') && 
-                                    document.body.contains(box) && event.target && 
-                                    typeof event.target.setPlaybackQuality === 'function') {{
-                                    event.target.setPlaybackQuality('tiny');
-                                }} else {{
-                                    // Clean up if box no longer valid
-                                    if (qualityInterval) {{
-                                        clearInterval(qualityInterval);
-                                        qualityInterval = null;
-                                    }}
-                                }}
-                            }} catch(e) {{
-                                console.log(`${{boxId}} quality error:`, e);
-                            }}
-                        }}, 1000);
-
-                        // Track actual playback time - but only for THIS video
-                        playbackInterval = setInterval(() => {{
-                            try {{
-                                // Multiple safety checks
-                                if (isDestroyed || !document.body.contains(box) || 
-                                    !event.target || typeof event.target.getPlayerState !== 'function') {{
-                                    if (playbackInterval) {{
-                                        clearInterval(playbackInterval);
-                                        playbackInterval = null;
-                                    }}
-                                    return;
-                                }}
-                                
-                                const state = event.target.getPlayerState();
-                                if (state === YT.PlayerState.PLAYING) {{
-                                    actualPlayedTime++;
-                                    console.log(`${{boxId}} played: ${{actualPlayedTime}}/${{targetDuration}}`);
-                                    
-                                    // Check if we've actually played for the target duration
-                                    if (actualPlayedTime >= targetDuration && !isDestroyed) {{
-                                        console.log(`${{boxId}} reached target, destroying`);
-                                        destroyVideo();
-                                    }}
-                                }}
-                            }} catch(err) {{
-                                console.log(`${{boxId}} tracking error:`, err);
-                            }}
-                        }}, 1000);
-                    }}
-                    
-                    else if (e.data == YT.PlayerState.ENDED) {{
-                        console.log(`${{boxId}} ended naturally`);
-                        if (!isDestroyed) {{
-                            destroyVideo();
-                        }}
-                    }}
-                    
-                    else if (e.data == YT.PlayerState.PAUSED) {{
-                        console.log(`${{boxId}} paused - timer stopped`);
-                    }}
-                    
-                    else if (e.data == YT.PlayerState.BUFFERING) {{
-                        console.log(`${{boxId}} buffering - timer paused`);
-                    }}
-                }});
-                
-                // Helper function to destroy THIS SPECIFIC video only
-                function destroyVideo() {{
-                    // Mark as destroyed first to prevent any further actions
-                    if (isDestroyed) return;
-                    isDestroyed = true;
-                    box.classList.add('destroyed');
-                    
-                    console.log(`Destroying ${{boxId}}`);
-                    
-                    // Clear THIS video's intervals with null checks
-                    if (qualityInterval) {{
-                        clearInterval(qualityInterval);
-                        qualityInterval = null;
-                    }}
-                    if (playbackInterval) {{
-                        clearInterval(playbackInterval);
-                        playbackInterval = null;
-                    }}
-                    
-                    // Stop THIS video
-                    try {{
-                        if (player && typeof player.stopVideo === 'function') {{
-                            player.stopVideo();
-                        }}
-                    }} catch(e) {{
-                        console.log(`${{boxId}} stop error:`, e);
-                    }}
-                    
-                    // Destroy the player instance
-                    try {{
-                        if (player && typeof player.destroy === 'function') {{
-                            player.destroy();
-                        }}
-                    }} catch(e) {{
-                        console.log(`${{boxId}} destroy error:`, e);
-                    }}
-                    
-                    // Fade out and remove THIS box only
-                    box.style.opacity = 0;
-                    setTimeout(() => {{
-                        // Extra safety: check if box still exists and hasn't been removed
-                        try {{
-                            if (box && box.parentNode && document.body.contains(box)) {{
-                                box.remove();
-                                console.log(`${{boxId}} removed from grid`);
-                            }}
-                        }} catch(e) {{
-                            console.log(`${{boxId}} removal error:`, e);
-                        }}
-                    }}, 1000);
+    /* detect play click */
+    box.addEventListener("click", () => {{
+        if (isDestroyed) return
+        
+        console.log(`Video ${{boxId}} clicked to play`)
+        
+        /* Force 144p quality every second */
+        qualityInterval = setInterval(() => {{
+            try {{
+                if (!isDestroyed && iframe && iframe.contentWindow) {{
+                    iframe.contentWindow.postMessage(JSON.stringify({{
+                        event:'command',
+                        func:'setPlaybackQuality',
+                        args:['tiny']
+                    }}), '*')
                 }}
+            }} catch(e){{}}
+        }}, 1000)
+
+        /* Track actual playback time using YouTube's API via postMessage */
+        // We can't directly track playback in iframe, so we'll use a combination approach
+        
+        // Method 1: Use the end parameter as a safety net (already set in iframe src)
+        // Method 2: Track time approximately with an interval that checks if video is still playing
+        
+        // Since we can't easily get playback state from iframe, we'll use a simplified approach:
+        // The iframe will automatically stop at 'end' time, so we just need to detect when it stops
+        
+        // Listen for when video might have ended (can't directly detect, so we'll poll)
+        let checkInterval = setInterval(() => {{
+            try {{
+                if (isDestroyed || !iframe || !iframe.contentWindow) {{
+                    clearInterval(checkInterval)
+                    return
+                }}
+                
+                // Request current time from YouTube player
+                iframe.contentWindow.postMessage(JSON.stringify({{
+                    event:'listening',
+                    id: boxId
+                }}), '*')
+            }} catch(e){{}}
+        }}, 1000)
+        
+        // Listen for messages from YouTube iframe
+        window.addEventListener('message', function(event) {{
+            try {{
+                if (isDestroyed) return
+                
+                let data = JSON.parse(event.data)
+                if (data.id === boxId && data.info && data.info.currentTime) {{
+                    actualPlayedTime = Math.floor(data.info.currentTime) - start
+                    if (actualPlayedTime < 0) actualPlayedTime = 0
+                    
+                    console.log(`${{boxId}} played: ${{actualPlayedTime}}/${{targetDuration}}`)
+                    
+                    // Check if we've reached target duration
+                    if (actualPlayedTime >= targetDuration && !isDestroyed) {{
+                        destroyVideo()
+                    }}
+                }}
+            }} catch(e){{}}
+        }})
+        
+        /* Simplified approach: Use a timer but check if video is likely still playing */
+        // Since we can't perfectly track, we'll use a combination of timer and checking if iframe exists
+        let startTime = Date.now()
+        let safetyTimer = setInterval(() => {{
+            let elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
+            
+            // If we've passed the target duration and video hasn't been destroyed yet
+            if (elapsedSeconds >= targetDuration && !isDestroyed) {{
+                console.log(`${{boxId}} timer-based destroy triggered`)
+                destroyVideo()
             }}
+        }}, 1000)
+        
+        /* Main destroy function */
+        function destroyVideo() {{
+            if (isDestroyed) return
+            isDestroyed = true
+            
+            console.log(`Destroying ${{boxId}}`)
+            
+            // Clear all intervals
+            if (qualityInterval) {{
+                clearInterval(qualityInterval)
+                qualityInterval = null
+            }}
+            if (playbackInterval) {{
+                clearInterval(playbackInterval)
+                playbackInterval = null
+            }}
+            if (safetyTimer) {{
+                clearInterval(safetyTimer)
+                safetyTimer = null
+            }}
+            
+            // Clear iframe source (nuclear option)
+            if (iframe) {{
+                iframe.src = ""
+            }}
+            
+            // Fade out and remove
+            box.style.opacity = 0
+            setTimeout(() => {{
+                if (box && box.parentNode) {{
+                    box.remove()
+                    console.log(`${{boxId}} removed from grid`)
+                }}
+            }}, 1000)
         }}
-    }});
+        
+        /* Fallback: The end parameter in iframe src will stop video at 'end' time */
+        /* So even if our tracking fails, video won't play beyond end */
+        
+    }}, {{once:true}})
 }}
 
-document.querySelectorAll(".video-box").forEach(box => {{
-    box.addEventListener("click", () => loadPlayer(box));
-}});
+document.querySelectorAll(".video-box").forEach(box=>{{
+    box.addEventListener("click",()=>loadPlayer(box))
+}})
 
-document.getElementById("shuffle-load").onclick = () => {{
-    let grid = document.getElementById("video-grid");
-    let boxes = [...grid.children];
+document.getElementById("shuffle-load").onclick=()=>{{
+    let grid=document.getElementById("video-grid")
+    let boxes=[...grid.children]
 
-    // Shuffle grid
-    for(let i=boxes.length-1; i>0; i--) {{
-        const j = Math.floor(Math.random()*(i+1));
-        [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
+    /* shuffle grid */
+    for(let i=boxes.length-1;i>0;i--) {{
+        let j=Math.floor(Math.random()*(i+1))
+        ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
     }}
-    boxes.forEach(box => grid.appendChild(box));
+    boxes.forEach(b=>grid.appendChild(b))
 
-    // Sequential loading with 1–5s random delay
-    let delay = 0;
-    boxes.forEach(box => {{
-        let randomDelay = 1000 + Math.random() * 4000; // 1–5s
-        setTimeout(() => {{
-            loadPlayer(box);
-        }}, delay);
-        delay += randomDelay;
-    }});
-}};
+    /* sequential loading with 1–5s random delay */
+    let delay=0
+    boxes.forEach(box=>{{
+        let randomDelay = 1000 + Math.random()*4000  // 1–5 seconds
+        setTimeout(()=>{{
+            loadPlayer(box)
+        }}, delay)
+        delay += randomDelay
+    }})
+}}
 </script>
 """
 
