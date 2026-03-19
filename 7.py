@@ -9,7 +9,7 @@ html_blocks = []
 
 for vid in video_ids:
     html_blocks.append(f"""
-<div class="video-box" data-video="{vid}" id="box-{vid}-{i}">
+<div class="video-box" data-video="{vid}">
     <img src="https://i.ytimg.com/vi_webp/{vid}/mqdefault.webp"
          loading="lazy"
          class="thumb">
@@ -66,13 +66,12 @@ function onYouTubeIframeAPIReady() {{
     YT_API_ready = true;
 }}
 
-// Store all active players in a Map for easy reference
-const activePlayers = new Map();
-
 function loadPlayer(box) {{
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
     const vid = box.dataset.video;
+    const boxId = 'box_' + Math.random().toString(36).substr(2, 9); // Unique ID for this box
+    console.log(`Loading video for ${{boxId}}`);
 
     // Mixed start strategy
     let start;
@@ -87,25 +86,20 @@ function loadPlayer(box) {{
 
     box.innerHTML = '';
     box.classList.add("loaded");
+    box.setAttribute('data-box-id', boxId); // Tag the box with unique ID
 
     const playerDiv = document.createElement("div");
-    playerDiv.style.width = '100%';
-    playerDiv.style.height = '100%';
+    playerDiv.setAttribute('data-player-id', boxId); // Tag player div
     box.appendChild(playerDiv);
 
-    // Create a unique ID for this player
-    const playerId = 'player_' + Math.random().toString(36).substr(2, 9);
-    playerDiv.id = playerId;
-
-    // Create completely isolated tracking for THIS video
+    // Create unique tracking variables for THIS video only
     let actualPlayedTime = 0;
     let qualityInterval = null;
     let playbackInterval = null;
     let isDestroyed = false;
-    
-    console.log(`Creating new player for box`);
+    let playerReady = false;
 
-    const player = new YT.Player(playerId, {{
+    const player = new YT.Player(playerDiv, {{
         height: '100%',
         width: '100%',
         videoId: vid,
@@ -117,94 +111,106 @@ function loadPlayer(box) {{
             playsinline: 1,
             start: start,
             end: end,
-            vq: 'tiny',
-            enablejsapi: 1,
-            origin: window.location.origin
+            vq: 'tiny'
         }},
         events: {{
             onReady: (event) => {{
-                console.log(`Player ready for box`);
+                playerReady = true;
+                console.log(`Player ready for ${{boxId}}`);
                 
-                // Store in active players map
-                activePlayers.set(playerId, {{
-                    player: event.target,
-                    box: box,
-                    targetDuration: targetDuration
-                }});
-                
-                // Add state change listener
                 event.target.addEventListener('onStateChange', function(e) {{
                     // Don't do anything if already destroyed
                     if (isDestroyed) return;
                     
-                    const state = e.data;
-                    
-                    if(state == YT.PlayerState.PLAYING) {{
-                        console.log(`Video playing`);
+                    if(e.data == YT.PlayerState.PLAYING) {{
+                        console.log(`${{boxId}} started playing`);
                         
-                        // Clear any existing intervals first
-                        if (qualityInterval) clearInterval(qualityInterval);
-                        if (playbackInterval) clearInterval(playbackInterval);
+                        // Clear any existing intervals first with safety checks
+                        if (qualityInterval) {{
+                            clearInterval(qualityInterval);
+                            qualityInterval = null;
+                        }}
+                        if (playbackInterval) {{
+                            clearInterval(playbackInterval);
+                            playbackInterval = null;
+                        }}
                         
-                        // Force 144p every second
+                        // Continuously force 144p every second
                         qualityInterval = setInterval(() => {{
                             try {{
-                                if (!isDestroyed && event.target && !isDestroyed) {{
+                                // Extra safety: check if this specific box still exists and isn't destroyed
+                                if (!isDestroyed && !box.classList.contains('destroyed') && 
+                                    document.body.contains(box) && event.target && 
+                                    typeof event.target.setPlaybackQuality === 'function') {{
                                     event.target.setPlaybackQuality('tiny');
+                                }} else {{
+                                    // Clean up if box no longer valid
+                                    if (qualityInterval) {{
+                                        clearInterval(qualityInterval);
+                                        qualityInterval = null;
+                                    }}
                                 }}
-                            }} catch(e){{}}
+                            }} catch(e) {{
+                                console.log(`${{boxId}} quality error:`, e);
+                            }}
                         }}, 1000);
 
-                        // Track actual playback time
+                        // Track actual playback time - but only for THIS video
                         playbackInterval = setInterval(() => {{
                             try {{
-                                if (isDestroyed || !event.target || !event.target.getPlayerState) {{
+                                // Multiple safety checks
+                                if (isDestroyed || !document.body.contains(box) || 
+                                    !event.target || typeof event.target.getPlayerState !== 'function') {{
+                                    if (playbackInterval) {{
+                                        clearInterval(playbackInterval);
+                                        playbackInterval = null;
+                                    }}
                                     return;
                                 }}
                                 
-                                const currentState = event.target.getPlayerState();
-                                if (currentState === YT.PlayerState.PLAYING) {{
+                                const state = event.target.getPlayerState();
+                                if (state === YT.PlayerState.PLAYING) {{
                                     actualPlayedTime++;
+                                    console.log(`${{boxId}} played: ${{actualPlayedTime}}/${{targetDuration}}`);
                                     
-                                    // Check if target reached
+                                    // Check if we've actually played for the target duration
                                     if (actualPlayedTime >= targetDuration && !isDestroyed) {{
-                                        console.log(`Target reached, destroying`);
+                                        console.log(`${{boxId}} reached target, destroying`);
                                         destroyVideo();
                                     }}
                                 }}
                             }} catch(err) {{
-                                console.log(`Error tracking:`, err);
+                                console.log(`${{boxId}} tracking error:`, err);
                             }}
                         }}, 1000);
                     }}
                     
-                    else if (state == YT.PlayerState.ENDED) {{
-                        console.log(`Video ended naturally`);
+                    else if (e.data == YT.PlayerState.ENDED) {{
+                        console.log(`${{boxId}} ended naturally`);
                         if (!isDestroyed) {{
                             destroyVideo();
                         }}
                     }}
                     
-                    else if (state == YT.PlayerState.PAUSED) {{
-                        console.log(`Video paused - timer stopped`);
+                    else if (e.data == YT.PlayerState.PAUSED) {{
+                        console.log(`${{boxId}} paused - timer stopped`);
                     }}
                     
-                    else if (state == YT.PlayerState.BUFFERING) {{
-                        console.log(`Video buffering - timer paused`);
+                    else if (e.data == YT.PlayerState.BUFFERING) {{
+                        console.log(`${{boxId}} buffering - timer paused`);
                     }}
                 }});
                 
-                // Destroy function - completely isolated to THIS box only
+                // Helper function to destroy THIS SPECIFIC video only
                 function destroyVideo() {{
-                    console.log(`Destroy function called for box`);
-                    
-                    // Mark as destroyed immediately to prevent any further actions
+                    // Mark as destroyed first to prevent any further actions
+                    if (isDestroyed) return;
                     isDestroyed = true;
+                    box.classList.add('destroyed');
                     
-                    // Remove from active players map
-                    activePlayers.delete(playerId);
+                    console.log(`Destroying ${{boxId}}`);
                     
-                    // Clear intervals
+                    // Clear THIS video's intervals with null checks
                     if (qualityInterval) {{
                         clearInterval(qualityInterval);
                         qualityInterval = null;
@@ -214,62 +220,45 @@ function loadPlayer(box) {{
                         playbackInterval = null;
                     }}
                     
-                    // Stop the video
+                    // Stop THIS video
                     try {{
-                        if (event.target && event.target.stopVideo) {{
-                            event.target.stopVideo();
+                        if (player && typeof player.stopVideo === 'function') {{
+                            player.stopVideo();
                         }}
                     }} catch(e) {{
-                        console.log(`Error stopping video:`, e);
+                        console.log(`${{boxId}} stop error:`, e);
                     }}
                     
-                    // Destroy the player
+                    // Destroy the player instance
                     try {{
-                        if (event.target && event.target.destroy) {{
-                            event.target.destroy();
+                        if (player && typeof player.destroy === 'function') {{
+                            player.destroy();
                         }}
                     }} catch(e) {{
-                        console.log(`Error destroying player:`, e);
+                        console.log(`${{boxId}} destroy error:`, e);
                     }}
                     
                     // Fade out and remove THIS box only
-                    requestAnimationFrame(() => {{
-                        box.style.opacity = 0;
-                        box.style.transition = 'opacity 1s';
-                        
-                        setTimeout(() => {{
-                            // Final check - make sure box still exists and we haven't been destroyed twice
-                            if (box && box.parentNode && !isDestroyed) {{
-                                // This shouldn't happen, but just in case
-                                return;
-                            }}
-                            if (box && box.parentNode) {{
+                    box.style.opacity = 0;
+                    setTimeout(() => {{
+                        // Extra safety: check if box still exists and hasn't been removed
+                        try {{
+                            if (box && box.parentNode && document.body.contains(box)) {{
                                 box.remove();
-                                console.log(`Box removed from grid`);
+                                console.log(`${{boxId}} removed from grid`);
                             }}
-                        }}, 1000);
-                    }});
+                        }} catch(e) {{
+                            console.log(`${{boxId}} removal error:`, e);
+                        }}
+                    }}, 1000);
                 }}
-            }},
-            
-            onError: (event) => {{
-                console.log(`Player error:`, event.data);
-                // If there's an error, still destroy after a delay
-                setTimeout(() => {{
-                    if (!isDestroyed) {{
-                        destroyVideo();
-                    }}
-                }}, 5000);
             }}
         }}
     }});
 }}
 
 document.querySelectorAll(".video-box").forEach(box => {{
-    box.addEventListener("click", (e) => {{
-        e.stopPropagation(); // Prevent event bubbling
-        loadPlayer(box);
-    }});
+    box.addEventListener("click", () => loadPlayer(box));
 }});
 
 document.getElementById("shuffle-load").onclick = () => {{
@@ -286,7 +275,7 @@ document.getElementById("shuffle-load").onclick = () => {{
     // Sequential loading with 1–5s random delay
     let delay = 0;
     boxes.forEach(box => {{
-        let randomDelay = 1000 + Math.random() * 4000;
+        let randomDelay = 1000 + Math.random() * 4000; // 1–5s
         setTimeout(() => {{
             loadPlayer(box);
         }}, delay);
