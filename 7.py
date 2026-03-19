@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "XuEAtQUrhkc"
+video_id = "ZYcZ_nBLG6Y"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -79,14 +79,18 @@ function loadPlayer(box) {{
         start = Math.floor(Math.random() * 200);
     }}
 
-    const duration = Math.floor(Math.random()*(46-35+1)) + 35;
-    const end = start + duration;
+    const targetDuration = Math.floor(Math.random()*(46-35+1)) + 35; // Renamed for clarity
+    const end = start + targetDuration;
 
     box.innerHTML = '';
     box.classList.add("loaded");
 
     const playerDiv = document.createElement("div");
     box.appendChild(playerDiv);
+
+    let actualPlayedTime = 0; // Track actual seconds played
+    let qualityInterval;
+    let playbackInterval;
 
     const player = new YT.Player(playerDiv, {{
         height: '100%',
@@ -107,21 +111,63 @@ function loadPlayer(box) {{
                 event.target.addEventListener('onStateChange', function(e) {{
                     if(e.data == YT.PlayerState.PLAYING) {{
                         // Continuously force 144p every second
-                        let qualityInterval = setInterval(() => {{
+                        qualityInterval = setInterval(() => {{
                             try {{
                                 event.target.setPlaybackQuality('tiny');
                             }} catch(e){{}}
                         }}, 1000);
 
-                        // Stop video and destroy after duration
-                        setTimeout(() => {{
-                            event.target.stopVideo();
-                            clearInterval(qualityInterval);
-                            box.style.opacity = 0;
-                            setTimeout(() => box.remove(), 1000);
-                        }}, duration * 1000);
+                        // Track actual playback time
+                        playbackInterval = setInterval(() => {{
+                            try {{
+                                // Only increment if actually playing
+                                if (event.target && event.target.getPlayerState) {{
+                                    const state = event.target.getPlayerState();
+                                    if (state === YT.PlayerState.PLAYING) {{
+                                        actualPlayedTime++;
+                                        console.log(`Actual played: ${{actualPlayedTime}}/${{targetDuration}}`);
+                                        
+                                        // Check if we've actually played for the target duration
+                                        if (actualPlayedTime >= targetDuration) {{
+                                            console.log("Target duration reached, destroying video");
+                                            destroyVideo();
+                                        }}
+                                    }}
+                                }}
+                            }} catch(err) {{
+                                console.log("Error tracking playback:", err);
+                            }}
+                        }}, 1000);
+                    }}
+                    
+                    else if (e.data == YT.PlayerState.ENDED) {{
+                        // Video naturally ended - check if we reached target
+                        if (actualPlayedTime >= targetDuration) {{
+                            destroyVideo();
+                        }}
                     }}
                 }});
+                
+                // Helper function to destroy video
+                function destroyVideo() {{
+                    // Clear all intervals
+                    if (qualityInterval) clearInterval(qualityInterval);
+                    if (playbackInterval) clearInterval(playbackInterval);
+                    
+                    try {{
+                        if (player && player.stopVideo) {{
+                            player.stopVideo();
+                        }}
+                    }} catch(e) {{}}
+                    
+                    // Fade out and remove
+                    box.style.opacity = 0;
+                    setTimeout(() => {{
+                        if (box.parentNode) {{
+                            box.remove();
+                        }}
+                    }}, 1000);
+                }}
             }}
         }}
     }});
