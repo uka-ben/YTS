@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "ZYcZ_nBLG6Y"  # Using your Version 7 video ID
+video_id = "ZYcZ_nBLG6Y"
 video_ids = [video_id] * 20
 
 html_blocks = []
@@ -57,192 +57,229 @@ margin-bottom:10px;
 {''.join(html_blocks)}
 </div>
 
+<script src="https://www.youtube.com/iframe_api"></script>
+
 <script>
+let YT_API_ready = false;
+
+function onYouTubeIframeAPIReady() {{
+    YT_API_ready = true;
+}}
+
+// Store all active players in a Map for safety
+const activePlayers = new Map();
+
 function loadPlayer(box) {{
-    if(box.classList.contains("loaded")) return
+    if(box.classList.contains("loaded") || !YT_API_ready) return;
 
-    const vid = box.dataset.video
-    const boxId = 'box_' + Math.random().toString(36).substr(2, 9) // Unique ID
+    const vid = box.dataset.video;
 
-    /* mixed start strategy */
-    let start
+    // Mixed start strategy
+    let start;
     if(Math.random() < 0.7){{
-        start = 0
-    }}else{{
-        start = Math.floor(Math.random()*200)
+        start = 0;
+    }} else {{
+        start = Math.floor(Math.random() * 200);
     }}
 
-    const targetDuration = Math.floor(Math.random()*(46-35+1))+35  // Target play time
-    const end = start + targetDuration
+    const targetDuration = Math.floor(Math.random()*(46-35+1)) + 35;
+    const end = start + targetDuration;
 
-    const iframe = document.createElement("iframe")
-    iframe.src =
-    "https://www.youtube.com/embed/"+vid+
-    "?autoplay=0"+
-    "&controls=1"+
-    "&rel=0"+
-    "&modestbranding=1"+
-    "&vq=tiny"+
-    "&start="+start+
-    "&end="+end
+    box.innerHTML = '';
+    box.classList.add("loaded");
 
-    iframe.allow="autoplay"
-    iframe.setAttribute('data-box-id', boxId)
+    const playerDiv = document.createElement("div");
+    box.appendChild(playerDiv);
+
+    // Create unique tracking variables for THIS video only
+    let actualPlayedTime = 0;
+    let qualityInterval = null;
+    let playbackInterval = null;
+    let isDestroyed = false;
     
-    box.innerHTML=""
-    box.appendChild(iframe)
-    box.classList.add("loaded")
-    box.setAttribute('data-box-id', boxId)
+    // Generate a unique ID for this player
+    const playerId = 'player_' + Math.random().toString(36).substr(2, 9);
 
-    let actualPlayedTime = 0
-    let playbackInterval = null
-    let isDestroyed = false
-    let qualityInterval = null
-
-    /* detect play click */
-    box.addEventListener("click", () => {{
-        if (isDestroyed) return
-        
-        console.log(`Video ${{boxId}} clicked to play`)
-        
-        /* Force 144p quality every second */
-        qualityInterval = setInterval(() => {{
-            try {{
-                if (!isDestroyed && iframe && iframe.contentWindow) {{
-                    iframe.contentWindow.postMessage(JSON.stringify({{
-                        event:'command',
-                        func:'setPlaybackQuality',
-                        args:['tiny']
-                    }}), '*')
-                }}
-            }} catch(e){{}}
-        }}, 1000)
-
-        /* Track actual playback time using YouTube's API via postMessage */
-        // We can't directly track playback in iframe, so we'll use a combination approach
-        
-        // Method 1: Use the end parameter as a safety net (already set in iframe src)
-        // Method 2: Track time approximately with an interval that checks if video is still playing
-        
-        // Since we can't easily get playback state from iframe, we'll use a simplified approach:
-        // The iframe will automatically stop at 'end' time, so we just need to detect when it stops
-        
-        // Listen for when video might have ended (can't directly detect, so we'll poll)
-        let checkInterval = setInterval(() => {{
-            try {{
-                if (isDestroyed || !iframe || !iframe.contentWindow) {{
-                    clearInterval(checkInterval)
-                    return
-                }}
+    const player = new YT.Player(playerDiv, {{
+        height: '100%',
+        width: '100%',
+        videoId: vid,
+        playerVars: {{
+            autoplay: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            start: start,
+            end: end,
+            vq: 'tiny'
+        }},
+        events: {{
+            onReady: (event) => {{
+                // Store in active players map
+                activePlayers.set(playerId, {{
+                    player: event.target,
+                    box: box,
+                    isDestroyed: false
+                }});
                 
-                // Request current time from YouTube player
-                iframe.contentWindow.postMessage(JSON.stringify({{
-                    event:'listening',
-                    id: boxId
-                }}), '*')
-            }} catch(e){{}}
-        }}, 1000)
-        
-        // Listen for messages from YouTube iframe
-        window.addEventListener('message', function(event) {{
-            try {{
-                if (isDestroyed) return
-                
-                let data = JSON.parse(event.data)
-                if (data.id === boxId && data.info && data.info.currentTime) {{
-                    actualPlayedTime = Math.floor(data.info.currentTime) - start
-                    if (actualPlayedTime < 0) actualPlayedTime = 0
+                event.target.addEventListener('onStateChange', function(e) {{
+                    // Don't do anything if already destroyed
+                    if (isDestroyed) return;
                     
-                    console.log(`${{boxId}} played: ${{actualPlayedTime}}/${{targetDuration}}`)
-                    
-                    // Check if we've reached target duration
-                    if (actualPlayedTime >= targetDuration && !isDestroyed) {{
-                        destroyVideo()
+                    if(e.data == YT.PlayerState.PLAYING) {{
+                        console.log(`Video ${playerId} started playing`);
+                        
+                        // Clear any existing intervals first
+                        if (qualityInterval) {{
+                            clearInterval(qualityInterval);
+                            qualityInterval = null;
+                        }}
+                        if (playbackInterval) {{
+                            clearInterval(playbackInterval);
+                            playbackInterval = null;
+                        }}
+                        
+                        // Continuously force 144p every second
+                        qualityInterval = setInterval(() => {{
+                            try {{
+                                // Check if this specific player still exists and isn't destroyed
+                                const playerData = activePlayers.get(playerId);
+                                if (!isDestroyed && playerData && !playerData.isDestroyed && event.target && event.target.setPlaybackQuality) {{
+                                    event.target.setPlaybackQuality('tiny');
+                                }} else {{
+                                    // If player no longer valid, clear this interval
+                                    if (qualityInterval) {{
+                                        clearInterval(qualityInterval);
+                                        qualityInterval = null;
+                                    }}
+                                }}
+                            }} catch(e) {{
+                                console.log(`Error setting quality for ${playerId}:`, e);
+                            }}
+                        }}, 1000);
+
+                        // Track actual playback time
+                        playbackInterval = setInterval(() => {{
+                            try {{
+                                // Check if this specific player still exists
+                                const playerData = activePlayers.get(playerId);
+                                if (isDestroyed || !playerData || playerData.isDestroyed || !event.target || !event.target.getPlayerState) {{
+                                    if (playbackInterval) {{
+                                        clearInterval(playbackInterval);
+                                        playbackInterval = null;
+                                    }}
+                                    return;
+                                }}
+                                
+                                const state = event.target.getPlayerState();
+                                if (state === YT.PlayerState.PLAYING) {{
+                                    actualPlayedTime++;
+                                    console.log(`Video ${playerId} played: ${{actualPlayedTime}}/${{targetDuration}}`);
+                                    
+                                    // Check if we've actually played for the target duration
+                                    if (actualPlayedTime >= targetDuration && !isDestroyed) {{
+                                        console.log(`Video ${playerId} reached target`);
+                                        destroyVideo();
+                                    }}
+                                }}
+                            }} catch(err) {{
+                                console.log(`Error tracking video ${playerId}:`, err);
+                            }}
+                        }}, 1000);
                     }}
+                    
+                    else if (e.data == YT.PlayerState.ENDED) {{
+                        // Video naturally ended - destroy if not already
+                        if (!isDestroyed) {{
+                            destroyVideo();
+                        }}
+                    }}
+                }});
+                
+                // Helper function to destroy THIS SPECIFIC video only
+                function destroyVideo() {{
+                    // Mark as destroyed first
+                    isDestroyed = true;
+                    
+                    // Update map
+                    const playerData = activePlayers.get(playerId);
+                    if (playerData) {{
+                        playerData.isDestroyed = true;
+                    }}
+                    
+                    console.log(`Destroying video ${playerId}`);
+                    
+                    // Clear THIS video's intervals
+                    if (qualityInterval) {{
+                        clearInterval(qualityInterval);
+                        qualityInterval = null;
+                    }}
+                    if (playbackInterval) {{
+                        clearInterval(playbackInterval);
+                        playbackInterval = null;
+                    }}
+                    
+                    // Stop THIS video
+                    try {{
+                        if (player && player.stopVideo) {{
+                            player.stopVideo();
+                        }}
+                    }} catch(e) {{
+                        console.log(`Error stopping video ${playerId}:`, e);
+                    }}
+                    
+                    // Remove from active players map after a delay
+                    setTimeout(() => {{
+                        activePlayers.delete(playerId);
+                    }}, 1000);
+                    
+                    // Fade out and remove THIS box only
+                    box.style.opacity = 0;
+                    setTimeout(() => {{
+                        // Check if box still exists and hasn't been removed already
+                        if (box && box.parentNode) {{
+                            box.remove();
+                            console.log(`Video ${playerId} removed from grid`);
+                        }}
+                    }}, 1000);
                 }}
-            }} catch(e){{}}
-        }})
-        
-        /* Simplified approach: Use a timer but check if video is likely still playing */
-        // Since we can't perfectly track, we'll use a combination of timer and checking if iframe exists
-        let startTime = Date.now()
-        let safetyTimer = setInterval(() => {{
-            let elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
-            
-            // If we've passed the target duration and video hasn't been destroyed yet
-            if (elapsedSeconds >= targetDuration && !isDestroyed) {{
-                console.log(`${{boxId}} timer-based destroy triggered`)
-                destroyVideo()
             }}
-        }}, 1000)
-        
-        /* Main destroy function */
-        function destroyVideo() {{
-            if (isDestroyed) return
-            isDestroyed = true
-            
-            console.log(`Destroying ${{boxId}}`)
-            
-            // Clear all intervals
-            if (qualityInterval) {{
-                clearInterval(qualityInterval)
-                qualityInterval = null
-            }}
-            if (playbackInterval) {{
-                clearInterval(playbackInterval)
-                playbackInterval = null
-            }}
-            if (safetyTimer) {{
-                clearInterval(safetyTimer)
-                safetyTimer = null
-            }}
-            
-            // Clear iframe source (nuclear option)
-            if (iframe) {{
-                iframe.src = ""
-            }}
-            
-            // Fade out and remove
-            box.style.opacity = 0
-            setTimeout(() => {{
-                if (box && box.parentNode) {{
-                    box.remove()
-                    console.log(`${{boxId}} removed from grid`)
-                }}
-            }}, 1000)
         }}
-        
-        /* Fallback: The end parameter in iframe src will stop video at 'end' time */
-        /* So even if our tracking fails, video won't play beyond end */
-        
-    }}, {{once:true}})
+    }});
 }}
 
-document.querySelectorAll(".video-box").forEach(box=>{{
-    box.addEventListener("click",()=>loadPlayer(box))
-}})
+document.querySelectorAll(".video-box").forEach(box => {{
+    box.addEventListener("click", () => loadPlayer(box));
+}});
 
-document.getElementById("shuffle-load").onclick=()=>{{
-    let grid=document.getElementById("video-grid")
-    let boxes=[...grid.children]
+document.getElementById("shuffle-load").onclick = () => {{
+    let grid = document.getElementById("video-grid");
+    let boxes = [...grid.children];
 
-    /* shuffle grid */
-    for(let i=boxes.length-1;i>0;i--) {{
-        let j=Math.floor(Math.random()*(i+1))
-        ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
+    // Shuffle grid
+    for(let i=boxes.length-1; i>0; i--) {{
+        const j = Math.floor(Math.random()*(i+1));
+        [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }}
-    boxes.forEach(b=>grid.appendChild(b))
+    boxes.forEach(box => grid.appendChild(box));
 
-    /* sequential loading with 1–5s random delay */
-    let delay=0
-    boxes.forEach(box=>{{
-        let randomDelay = 1000 + Math.random()*4000  // 1–5 seconds
-        setTimeout(()=>{{
-            loadPlayer(box)
-        }}, delay)
-        delay += randomDelay
-    }})
-}}
+    // Sequential loading with 1–5s random delay
+    let delay = 0;
+    boxes.forEach(box => {{
+        let randomDelay = 1000 + Math.random() * 4000; // 1–5s
+        setTimeout(() => {{
+            loadPlayer(box);
+        }}, delay);
+        delay += randomDelay;
+    }});
+}};
+
+// Optional: Add a health check to clean up any stuck intervals
+setInterval(() => {{
+    // This runs independently and doesn't interfere with videos
+    console.log(`Active players: ${activePlayers.size}`);
+}}, 30000);
 </script>
 """
 
