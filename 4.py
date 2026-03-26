@@ -189,7 +189,7 @@ function loadPlayer(box) {{
                         box.style.backgroundColor = '#000';
                     }} catch(e) {{}}
                     
-                    console.log(`Video completed after ${actualPlayedTime} seconds and hidden`);
+                    console.log("Video completed after ${actualPlayedTime} seconds and hidden");
                 }}
             }}
         }}
