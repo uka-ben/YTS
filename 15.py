@@ -213,9 +213,8 @@ function playVideo(box) {{
     }}
 }}
 
-// Random duration between 36 and 50 seconds
 function getRandomDuration() {{
-    return Math.floor(Math.random() * 15) + 36;
+    return Math.floor(Math.random() * 15) + 36; // 36-50 seconds
 }}
 
 function loadPlayer(box) {{
@@ -226,14 +225,16 @@ function loadPlayer(box) {{
 
     setTimeout(() => {{
         const vid = box.dataset.video;
-        const duration = getRandomDuration(); // random end time
+        const duration = getRandomDuration();  // random duration for this video
+        const end = duration;  // start at 0, end at random duration
+        
         box.innerHTML = '';
         box.classList.add("loaded");
 
         const playerDiv = document.createElement("div");
         box.appendChild(playerDiv);
 
-        debug(`Creating player with duration {duration}s (video will end at {duration}s)`);
+        debug(`Creating player: duration=${{duration}}s, end=${{end}}s`);
 
         const player = new YT.Player(playerDiv, {{
             height: '100%',
@@ -245,8 +246,8 @@ function loadPlayer(box) {{
                 rel: 0,
                 modestbranding: 1,
                 playsinline: 1,
-                start: 0,          // always start at beginning
-                end: duration,     // random end time
+                start: 0,
+                end: end,
                 vq: 'tiny'
             }},
             events: {{
@@ -270,7 +271,7 @@ function loadPlayer(box) {{
                                 }} catch(e){{}}
                             }}, 1000);
                         }} else if (e.data == YT.PlayerState.ENDED) {{
-                            debug("⏱️ Video ended naturally: " + vid);
+                            debug("⏱️ Video ended naturally (duration reached): " + vid);
                             destroyVideo(box, event.target);
                             if (qualityInterval) clearInterval(qualityInterval);
                             destroyTriggered = true;
