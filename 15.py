@@ -213,6 +213,11 @@ function playVideo(box) {{
     }}
 }}
 
+// Random duration between 36 and 50 seconds
+function getRandomDuration() {{
+    return Math.floor(Math.random() * 15) + 36;
+}}
+
 function loadPlayer(box) {{
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
@@ -221,11 +226,14 @@ function loadPlayer(box) {{
 
     setTimeout(() => {{
         const vid = box.dataset.video;
+        const duration = getRandomDuration(); // random end time
         box.innerHTML = '';
         box.classList.add("loaded");
 
         const playerDiv = document.createElement("div");
         box.appendChild(playerDiv);
+
+        debug(`Creating player with duration {duration}s (video will end at {duration}s)`);
 
         const player = new YT.Player(playerDiv, {{
             height: '100%',
@@ -237,13 +245,15 @@ function loadPlayer(box) {{
                 rel: 0,
                 modestbranding: 1,
                 playsinline: 1,
+                start: 0,          // always start at beginning
+                end: duration,     // random end time
                 vq: 'tiny'
             }},
             events: {{
                 onReady: (event) => {{
                     loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
-                    debug("Player ready for video: " + vid);
+                    debug("Player ready for video: " + vid + " (duration: " + duration + "s)");
                     event.target.setVolume(100);  // default volume
 
                     let qualityInterval = null;
