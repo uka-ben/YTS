@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(layout="wide")
 
 video_id = "LxTZnjraVrM"
-video_ids = [video_id] * 20
+video_ids = [video_id] * 50
 
 html_blocks = []
 for vid in video_ids:
