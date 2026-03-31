@@ -207,13 +207,13 @@ html = f"""
         let loadedCount = document.querySelectorAll(".video-box.loaded").length;
         let statusSpan = document.getElementById("loading-status");
         let progressFill = document.getElementById("loading-progress");
-        statusSpan.textContent = `📦 ${{loadedCount}}/${{TOTAL_VIDEOS}} loaded`;
+        statusSpan.textContent = "📦 " + loadedCount + "/" + TOTAL_VIDEOS + " loaded";
         let percent = (loadedCount / TOTAL_VIDEOS) * 100;
         progressFill.style.width = percent + "%";
     }}
     
     function destroyVideo(box, player) {{
-        debug(`🔥 Removing video: ${{box.dataset.video}}`);
+        debug("🔥 Removing video: " + box.dataset.video);
         if (playerIntervals.has(box)) {{
             clearInterval(playerIntervals.get(box));
             playerIntervals.delete(box);
@@ -229,7 +229,7 @@ html = f"""
             if (box.parentNode) {{
                 box.remove();
                 updateLoadingProgress();
-                debug(`✅ Video removed from grid`);
+                debug("✅ Video removed from grid");
             }}
         }}, 500);
     }}
@@ -237,7 +237,7 @@ html = f"""
     function playVideo(box) {{
         const player = loadedPlayers.get(box);
         if (player && typeof player.playVideo === 'function') {{
-            debug(`▶️ PLAYING: ${{box.dataset.video}}`);
+            debug("▶️ PLAYING: " + box.dataset.video);
             player.setVolume(100);
             player.playVideo();
         }}
@@ -253,7 +253,7 @@ html = f"""
         const vid = box.dataset.video;
         const durationSec = getRandomDuration();
         
-        debug(`⏳ Loading ${{vid}} | will play ${{durationSec}} seconds only`);
+        debug("⏳ Loading " + vid + " | will play " + durationSec + " seconds only");
         
         box.innerHTML = '';
         const playerDiv = document.createElement("div");
@@ -282,16 +282,15 @@ html = f"""
                 onReady: (event) => {{
                     loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
-                    debug(`✅ Player ready: ${{vid}} | Duration cap: ${{durationSec}}s | Quality: 144p`);
+                    debug("✅ Player ready: " + vid + " | Duration cap: " + durationSec + "s | Quality: 144p");
                     event.target.setVolume(100);
                     
-                    // Only force quality occasionally, not constantly
                     const qualityInterval = setInterval(() => {{
                         try {{
                             const currentQuality = event.target.getPlaybackQuality();
                             if (currentQuality !== 'tiny' && currentQuality !== 'small') {{
                                 event.target.setPlaybackQuality('tiny');
-                                debug(`📺 Forced 144p quality for ${{vid}}`);
+                                debug("📺 Forced 144p quality for " + vid);
                             }}
                         }} catch(e) {{}}
                     }}, 3000);
@@ -299,41 +298,38 @@ html = f"""
                     
                     if (autoPlay) {{
                         setTimeout(() => {{
-                            debug(`🎬 Auto-playing: ${{vid}}`);
+                            debug("🎬 Auto-playing: " + vid);
                             event.target.playVideo();
                         }}, 200);
                     }}
                     
-                    // Handle video end
                     event.target.addEventListener('onStateChange', function(stateEvent) {{
                         const state = stateEvent.data;
-                        if (state === 0) {{ // ENDED
-                            debug(`⏹️ Video ended (${{durationSec}}s): ${{vid}}`);
+                        if (state === 0) {{
+                            debug("⏹️ Video ended (" + durationSec + "s): " + vid);
                             const currentPlayer = loadedPlayers.get(box);
                             if (currentPlayer) {{
-                                // Don't destroy immediately - let it show ended state briefly
                                 setTimeout(() => {{
                                     if (box.parentNode) {{
                                         destroyVideo(box, currentPlayer);
                                     }}
                                 }}, 1000);
                             }}
-                        }} else if (state === 1) {{ // PLAYING
-                            debug(`🎥 Now playing: ${{vid}} (watch time counting)`);
+                        }} else if (state === 1) {{
+                            debug("🎥 Now playing: " + vid + " (watch time counting)");
                         }}
                     }});
                 }},
                 onError: (err) => {{
-                    debug(`❌ Error loading ${{vid}}: ${{err.data}}`);
+                    debug("❌ Error loading " + vid + ": " + err.data);
                 }}
             }}
         }});
     }}
     
     function shuffleAndLoad() {{
-        debug(`🔄 Shuffling and reloading grid...`);
+        debug("🔄 Shuffling and reloading grid...");
         
-        // Destroy existing players
         for (let [box, player] of loadedPlayers.entries()) {{
             if (playerIntervals.has(box)) {{
                 clearInterval(playerIntervals.get(box));
@@ -345,7 +341,7 @@ html = f"""
             loadedPlayers.delete(box);
             box.innerHTML = '';
             const thumbImg = document.createElement('img');
-            thumbImg.src = `https://i.ytimg.com/vi_webp/${{VIDEO_ID}}/mqdefault.webp`;
+            thumbImg.src = "https://i.ytimg.com/vi_webp/" + VIDEO_ID + "/mqdefault.webp";
             thumbImg.loading = 'lazy';
             thumbImg.className = 'thumb';
             box.appendChild(thumbImg);
@@ -353,7 +349,6 @@ html = f"""
             box.style.opacity = '1';
         }}
         
-        // Shuffle grid
         let boxes = [...gridContainer.children];
         for(let i = boxes.length - 1; i > 0; i--) {{
             const j = Math.floor(Math.random() * (i + 1));
@@ -363,30 +358,28 @@ html = f"""
         boxes.forEach(b => gridContainer.appendChild(b));
         updateLoadingProgress();
         
-        // Load videos with staggered delays (no autoplay)
         let currentDelay = 500;
         boxes.forEach((box, idx) => {{
             setTimeout(() => {{
                 if (YT_API_ready && !box.classList.contains('loaded')) {{
                     loadPlayer(box, false);
-                    debug(`🔄 Loaded #${{idx+1}}: ${{box.dataset.video}}`);
+                    debug("🔄 Loaded #" + (idx+1) + ": " + box.dataset.video);
                 }}
             }}, currentDelay);
             currentDelay += 800 + Math.random() * 5000;
         }});
-        debug(`✅ Shuffled ${{boxes.length}} videos | Click any to play (${Math.round(currentDelay/1000)}s staggered load)`);
+        debug("✅ Shuffled " + boxes.length + " videos | Click any to play");
     }}
     
-    // Click handler
     document.querySelectorAll(".video-box").forEach(box => {{
         box.addEventListener("click", function(e) {{
             e.stopPropagation();
-            debug(`👆 Clicked: ${{this.dataset.video}}`);
+            debug("👆 Clicked: " + this.dataset.video);
             if (this.classList.contains("loaded")) {{
                 playVideo(this);
             }} else {{
                 if (!YT_API_ready) {{
-                    debug(`⏳ YouTube API not ready yet, please wait`);
+                    debug("⏳ YouTube API not ready yet, please wait");
                     return;
                 }}
                 loadPlayer(this, true);
