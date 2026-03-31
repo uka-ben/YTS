@@ -215,20 +215,20 @@ let totalVideos = document.querySelectorAll(".video-box").length;
 let totalViews = 0;
 let totalDataMB = 0;
 
-// Stats tracking
 function updateStats() {{
-    document.getElementById("stats").innerHTML = `📊 Views: ${{totalViews}} | 💾 Data: ${{totalDataMB.toFixed(1)}} MB`;
+    document.getElementById("stats").innerHTML = "📊 Views: " + totalViews + " | 💾 Data: " + totalDataMB.toFixed(1) + " MB";
 }}
 
-function debug(msg, type="info") {{
+function debug(msg, type) {{
+    if (type === undefined) type = "info";
     let timeStr = new Date().toLocaleTimeString();
     let icon = type === "view" ? "👁️" : type === "data" ? "💾" : "🔧";
-    debugContent.innerHTML += `<div>${{timeStr}} ${{icon}} ${{msg}}</div>`;
+    debugContent.innerHTML += "<div>" + timeStr + " " + icon + " " + msg + "</div>";
     debugContent.scrollTop = debugContent.scrollHeight;
     console.log(msg);
 }}
 
-clearDebug.addEventListener("click", () => {{
+clearDebug.addEventListener("click", function() {{
     debugContent.innerHTML = "";
 }});
 
@@ -251,19 +251,20 @@ function updateLoadingProgress() {{
     let loadedCount = document.querySelectorAll(".video-box.loaded").length;
     let loadingStatus = document.getElementById("loading-status");
     let loadingProgress = document.getElementById("loading-progress");
-    loadingStatus.textContent = `${{loadedCount}}/${{totalVideos}} loaded`;
+    loadingStatus.textContent = loadedCount + "/" + totalVideos + " loaded";
     let percent = (loadedCount / totalVideos) * 100;
     loadingProgress.style.width = percent + "%";
 }}
 
-function destroyVideo(box, player, viewCounted=false) {{
+function destroyVideo(box, player, viewCounted) {{
+    if(viewCounted === undefined) viewCounted = false;
     if(viewCounted) {{
         totalViews++;
-        debug(`✅ VIEW COUNTED! Total views: ${{totalViews}}`, "view");
+        debug("✅ VIEW COUNTED! Total views: " + totalViews, "view");
         updateStats();
     }}
     
-    debug(`🗑️ Destroying video: ${{box.dataset.video}}`);
+    debug("🗑️ Destroying video: " + box.dataset.video);
     try {{
         if(player && player.stopVideo) player.stopVideo();
         if(player && player.destroy) player.destroy();
@@ -273,21 +274,20 @@ function destroyVideo(box, player, viewCounted=false) {{
     box.style.opacity = '0';
     box.style.transition = 'opacity 1s';
     
-    setTimeout(() => {{
+    setTimeout(function() {{
         if (box.parentNode) {{
             box.remove();
             updateLoadingProgress();
-            debug(`✅ Video removed from grid`);
+            debug("✅ Video removed from grid");
         }}
     }}, 1000);
 }}
 
 function getRandomDuration() {{
-    return Math.floor(Math.random() * (MAX_DURATION - MIN_DURATION + 1)) + MIN_DURATION;
+    return Math.floor(Math.random() * ({MAX_DURATION} - {MIN_DURATION} + 1)) + {MIN_DURATION};
 }}
 
 function getRandomClickDelay() {{
-    // Natural human-like delay: 2-15 seconds
     return Math.random() * 13000 + 2000;
 }}
 
@@ -297,12 +297,11 @@ function loadPlayer(box) {{
     const exactDuration = getRandomDuration();
     const vid = box.dataset.video;
     
-    debug(`📦 Loading player: ${{vid}} (duration: ${{exactDuration}}s)`);
+    debug("📦 Loading player: " + vid + " (duration: " + exactDuration + "s)");
     
-    // Calculate potential data usage at 144p (~0.1 MB per second)
     const estimatedDataMB = (exactDuration * 0.1);
     totalDataMB += estimatedDataMB;
-    debug(`💾 Estimated data: ${{estimatedDataMB.toFixed(2)}} MB (total: ${{totalDataMB.toFixed(1)}} MB)`, "data");
+    debug("💾 Estimated data: " + estimatedDataMB.toFixed(2) + " MB (total: " + totalDataMB.toFixed(1) + " MB)", "data");
     updateStats();
     
     box.innerHTML = '';
@@ -322,27 +321,26 @@ function loadPlayer(box) {{
         playerVars: {{
             start: 0,
             end: exactDuration,
-            autoplay: 0,              // NO AUTOPLAY - views require user interaction
+            autoplay: 0,
             controls: 1,
             rel: 0,
             modestbranding: 1,
             playsinline: 1,
-            vq: 'tiny',               // 144p - minimal data
-            iv_load_policy: 3,        // No annotations
+            vq: 'tiny',
+            iv_load_policy: 3,
             fs: 0
         }},
         events: {{
-            onReady: (event) => {{
+            onReady: function(event) {{
                 loadedPlayers.set(box, event.target);
                 updateLoadingProgress();
                 
-                // User must click to play (ensures view counts)
                 let userInteracted = false;
                 
-                const startPlayback = () => {{
+                const startPlayback = function() {{
                     if (!userInteracted) {{
                         userInteracted = true;
-                        debug(`👆 USER CLICK - Starting playback for view counting`, "view");
+                        debug("👆 USER CLICK - Starting playback for view counting", "view");
                         event.target.playVideo();
                         box.removeEventListener('click', startPlayback);
                     }}
@@ -350,34 +348,30 @@ function loadPlayer(box) {{
                 
                 box.addEventListener('click', startPlayback);
                 
-                // Optional: Auto-click with natural delay (for automated testing)
-                // Comment out if you want strictly manual clicks
                 const naturalDelay = getRandomClickDelay();
-                setTimeout(() => {{
+                setTimeout(function() {{
                     if (!userInteracted && box.parentNode) {{
-                        debug(`🤖 Simulated natural click after ${{(naturalDelay/1000).toFixed(1)}}s`);
+                        debug("🤖 Simulated natural click after " + (naturalDelay/1000).toFixed(1) + "s");
                         startPlayback();
                     }}
                 }}, naturalDelay);
             }},
             
-            onStateChange: (e) => {{
+            onStateChange: function(e) {{
                 if (e.data === YT.PlayerState.PLAYING) {{
-                    debug(`▶️ Video playing - view will count after 30+ seconds`);
+                    debug("▶️ Video playing - view will count after 30+ seconds");
                     
-                    // Force 144p once at start
                     try {{
                         e.target.setPlaybackQuality('tiny');
                     }} catch(err) {{}}
                     
-                    // Track watch time for view confirmation
                     watchStartTime = Date.now();
-                    watchInterval = setInterval(() => {{
+                    watchInterval = setInterval(function() {{
                         const watchDuration = (Date.now() - watchStartTime) / 1000;
                         
                         if (watchDuration >= 30 && !viewCounted) {{
                             viewCounted = true;
-                            debug(`🎉 VIEW COUNTED! User watched ${{watchDuration.toFixed(1)}} seconds`, "view");
+                            debug("🎉 VIEW COUNTED! User watched " + watchDuration.toFixed(1) + " seconds", "view");
                             totalViews++;
                             updateStats();
                         }}
@@ -389,41 +383,38 @@ function loadPlayer(box) {{
                 }}
                 
                 if (e.data === YT.PlayerState.ENDED) {{
-                    debug(`🏁 Video ended - total watch time: ${{(Date.now() - watchStartTime)/1000}}s`);
+                    debug("🏁 Video ended - total watch time: " + ((Date.now() - watchStartTime)/1000).toFixed(1) + "s");
                     if (watchInterval) clearInterval(watchInterval);
                     destroyVideo(box, e.target, viewCounted);
                 }}
                 
                 if (e.data === YT.PlayerState.PAUSED) {{
-                    debug(`⏸️ Video paused - watch tracking continues on resume`);
+                    debug("⏸️ Video paused - watch tracking continues on resume");
                 }}
             }},
             
-            onError: (error) => {{
-                debug(`❌ Player error: ${{error.data}}`);
+            onError: function(error) {{
+                debug("❌ Player error: " + error.data);
             }}
         }}
     }});
 }}
 
-// Manual click on video box (if not loaded yet)
-document.querySelectorAll(".video-box").forEach(box => {{
+document.querySelectorAll(".video-box").forEach(function(box) {{
     box.addEventListener("click", function(e) {{
         e.stopPropagation();
-        debug(`🖱️ Manual click on video: ${{this.dataset.video}}`);
+        debug("🖱️ Manual click on video: " + this.dataset.video);
         if (!this.classList.contains("loaded")) {{
             loadPlayer(this);
         }}
     }});
 }});
 
-// Shuffle and load
 document.getElementById("shuffle-load").onclick = function() {{
-    debug(`🔄 SHUFFLE + LOAD triggered`);
+    debug("🔄 SHUFFLE + LOAD triggered");
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
     
-    // Destroy all existing players
     for (let [box, player] of loadedPlayers) {{
         try {{
             player.destroy();
@@ -431,31 +422,31 @@ document.getElementById("shuffle-load").onclick = function() {{
     }}
     loadedPlayers.clear();
     
-    // Shuffle grid
     for(let i=boxes.length-1; i>0; i--) {{
         const j = Math.floor(Math.random()*(i+1));
         [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }}
     grid.innerHTML = '';
-    boxes.forEach(box => grid.appendChild(box));
+    boxes.forEach(function(box) {{
+        grid.appendChild(box);
+    }});
     
     updateLoadingProgress();
     
-    // Load videos with staggered delays (2-15 seconds between loads)
     let delay = 0;
-    boxes.forEach(box => {{
+    boxes.forEach(function(box) {{
         let randomDelay = 2000 + Math.random() * 13000;
-        setTimeout(() => {{
+        setTimeout(function() {{
             if (box.parentNode) {{
                 loadPlayer(box);
             }}
         }}, delay);
         delay += randomDelay;
     }});
-    debug(`📋 Scheduled ${{boxes.length}} videos over ~${{Math.round(delay/1000)}} seconds`);
+    debug("📋 Scheduled " + boxes.length + " videos over ~" + Math.round(delay/1000) + " seconds");
 }};
 
-debug(`✅ App ready - ${totalVideos} videos loaded`);
+debug("✅ App ready - " + totalVideos + " videos loaded");
 </script>
 """
 
