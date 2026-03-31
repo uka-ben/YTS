@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(layout="wide", page_title="YouTube Grid - Data Saver Mode")
+st.set_page_config(layout="wide", page_title="YouTube Grid - No Buffer Mode")
 
 video_id = "LxTZnjraVrM"
 video_ids = [video_id] * 50
@@ -39,13 +39,10 @@ html = f"""
         cursor: pointer;
         aspect-ratio: 16/9;
         position: relative;
-        transition: opacity 0.3s ease, transform 0.1s;
+        transition: opacity 0.3s ease;
         background: #111;
         border-radius: 8px;
         overflow: hidden;
-    }}
-    .video-box:hover {{
-        transform: scale(1.02);
     }}
     .thumb {{
         width: 100%;
@@ -53,7 +50,7 @@ html = f"""
         object-fit: cover;
         border-radius: 8px;
     }}
-    iframe, .yt-player {{
+    iframe {{
         width: 100%;
         height: 100%;
         border: none;
@@ -82,7 +79,6 @@ html = f"""
     }}
     button:hover {{
         background: #cc0000;
-        transform: scale(0.98);
     }}
     .loading-status {{
         color: #ddd;
@@ -109,15 +105,17 @@ html = f"""
         position: fixed;
         bottom: 20px;
         right: 20px;
-        background: rgba(0,0,0,0.9);
+        background: rgba(0,0,0,0.95);
         color: #0f0;
         padding: 10px;
         border-radius: 12px;
         font-family: monospace;
-        font-size: 11px;
+        font-size: 10px;
         z-index: 10001;
-        width: 360px;
+        width: 380px;
         border-left: 3px solid #ff0000;
+        max-height: 300px;
+        overflow: auto;
     }}
     .debug-header {{
         display: flex;
@@ -136,9 +134,10 @@ html = f"""
         border-radius: 20px;
     }}
     .debug-content {{
-        max-height: 200px;
+        max-height: 250px;
         overflow-y: auto;
-        line-height: 1.4;
+        font-size: 9px;
+        line-height: 1.3;
     }}
     .hidden {{
         display: none !important;
@@ -151,19 +150,22 @@ html = f"""
         color: #ffdd99;
         border-radius: 20px;
     }}
-    @media (max-width: 600px) {{
-        .debug-console {{ width: 260px; font-size: 9px; }}
-        button {{ padding: 6px 16px; font-size: 13px; }}
+    .critical-buffer {{
+        background: #2a1e1e;
+        border-left: 4px solid #ff4444;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: #ff9999;
     }}
 </style>
 
 <div class="button-container">
-    <button id="shuffle-load">🔀 Shuffle + Load Players (Data Saver)</button>
+    <button id="shuffle-load">🔀 Shuffle + Load (NO Buffer Mode)</button>
     <span class="loading-status" id="loading-status">📦 0/50 loaded</span>
     <div class="loading-bar">
         <div class="loading-progress" id="loading-progress"></div>
     </div>
-    <div class="data-warning">⚠️ Buffering capped at 36-50s | 144p quality | Data saver ON</div>
+    <div class="data-warning">⚡ NO BUFFERING: Videos stop after 36-50s | 144p | Data saver</div>
 </div>
 
 <div id="video-grid">
@@ -172,7 +174,7 @@ html = f"""
 
 <div class="debug-console" id="debug-console">
     <div class="debug-header">
-        <span>📡 STRICT BUFFER MODE | Watch time counts</span>
+        <span>🔴 AGGRESSIVE BUFFER CONTROL ACTIVE</span>
         <button id="toggle-debug">Hide</button>
     </div>
     <div class="debug-content" id="debug-content"></div>
@@ -182,22 +184,24 @@ html = f"""
 
 <script>
     const TOTAL_VIDEOS = 50;
+    const VIDEO_ID = "{video_id}";
     let YT_API_ready = false;
     let loadedPlayers = new Map();
     let playerIntervals = new Map();
-    let debugConsole = document.getElementById("debug-console");
+    let bufferMonitors = new Map();
     let debugContent = document.getElementById("debug-content");
     let toggleDebug = document.getElementById("toggle-debug");
     let gridContainer = document.getElementById("video-grid");
     
-    function debug(msg) {{
+    function debug(msg, isError = false) {{
         console.log(msg);
         let timeStr = new Date().toLocaleTimeString();
         let logDiv = document.createElement('div');
+        logDiv.style.color = isError ? '#ff8888' : '#88ff88';
         logDiv.textContent = timeStr + ': ' + msg;
         debugContent.appendChild(logDiv);
         debugContent.scrollTop = debugContent.scrollHeight;
-        while(debugContent.children.length > 100) {{
+        while(debugContent.children.length > 80) {{
             debugContent.removeChild(debugContent.firstChild);
         }}
     }}
@@ -222,15 +226,38 @@ html = f"""
         progressFill.style.width = percent + "%";
     }}
     
+    // AGGRESSIVE: Kill any buffering by seeking and pausing
+    function killBuffering(player, box) {{
+        try {{
+            if (player && player.getPlayerState) {{
+                let state = player.getPlayerState();
+                // If buffering, immediately pause and seek to current time to stop pre-fetch
+                if (state === 3) {{ // YT.PlayerState.BUFFERING
+                    debug(`⚠️ KILLING BUFFER on ${{box.dataset.video}}`);
+                    player.pauseVideo();
+                    setTimeout(() => {{
+                        if (player && player.playVideo && !player.getPlayerState() === 1) {{
+                            // Don't resume - wait for user action
+                        }}
+                    }}, 50);
+                }}
+            }}
+        }} catch(e) {{}}
+    }}
+    
     function destroyVideo(box, player) {{
         debug(`🔥 DESTROYING video: ${{box.dataset.video}}`);
         if (playerIntervals.has(box)) {{
             clearInterval(playerIntervals.get(box));
             playerIntervals.delete(box);
         }}
+        if (bufferMonitors.has(box)) {{
+            clearInterval(bufferMonitors.get(box));
+            bufferMonitors.delete(box);
+        }}
         try {{
-            if (player.stopVideo) player.stopVideo();
-            if (player.destroy) player.destroy();
+            if (player && player.stopVideo) player.stopVideo();
+            if (player && player.destroy) player.destroy();
         }} catch(e) {{}}
         loadedPlayers.delete(box);
         box.style.transition = 'opacity 0.5s ease';
@@ -247,13 +274,9 @@ html = f"""
     function playVideo(box) {{
         const player = loadedPlayers.get(box);
         if (player && typeof player.playVideo === 'function') {{
-            debug(`▶️ PLAYING video: ${{box.dataset.video}} (watch time will count)`);
+            debug(`▶️ PLAYING: ${{box.dataset.video}} (watch time counts)`);
             player.setVolume(100);
             player.playVideo();
-            box.style.transform = 'scale(0.97)';
-            setTimeout(() => {{ if(box) box.style.transform = 'scale(1)'; }}, 120);
-        }} else {{
-            debug(`⚠️ Cannot play: player not ready`);
         }}
     }}
     
@@ -266,9 +289,8 @@ html = f"""
         
         const vid = box.dataset.video;
         const durationSec = getRandomDuration();
-        const endSec = durationSec;
         
-        debug(`⏳ Loading player for ${{vid}} | duration cap: ${{durationSec}}s (NO extra buffering)`);
+        debug(`⏳ Loading ${{vid}} | duration: ${{durationSec}}s | NO PRE-BUFFER`);
         
         box.innerHTML = '';
         const playerDiv = document.createElement("div");
@@ -277,6 +299,7 @@ html = f"""
         box.appendChild(playerDiv);
         box.classList.add("loaded");
         
+        // CRITICAL: Use minimal buffer by setting low quality and no related videos
         const player = new YT.Player(playerDiv, {{
             height: '100%',
             width: '100%',
@@ -288,39 +311,64 @@ html = f"""
                 modestbranding: 1,
                 playsinline: 1,
                 start: 0,
-                end: endSec,
+                end: durationSec,
                 vq: 'tiny',
-                iv_load_policy: 3
+                iv_load_policy: 3,
+                enablejsapi: 1,
+                origin: window.location.origin
             }},
             events: {{
                 onReady: (event) => {{
                     loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
-                    debug(`✅ Player READY: ${{vid}} | duration limit = ${{durationSec}}s | quality 144p`);
+                    debug(`✅ READY: ${{vid}} | ${durationSec}s limit | 144p quality`);
                     event.target.setVolume(100);
                     
+                    // Force quality to lowest every second
                     const qualityInterval = setInterval(() => {{
                         try {{
                             if (event.target && event.target.setPlaybackQuality) {{
                                 event.target.setPlaybackQuality('tiny');
                             }}
                         }} catch(e) {{}}
-                    }}, 2000);
+                    }}, 1000);
                     playerIntervals.set(box, qualityInterval);
                     
+                    // Monitor for buffering and kill it immediately
+                    const bufferMonitor = setInterval(() => {{
+                        try {{
+                            let state = event.target.getPlayerState();
+                            if (state === 3) {{ // BUFFERING
+                                debug(`🔴 BUFFER DETECTED on ${{vid}} - KILLING IT`);
+                                event.target.pauseVideo();
+                                setTimeout(() => {{
+                                    if (event.target && event.target.getPlayerState() === 3) {{
+                                        event.target.stopVideo();
+                                        debug(`💀 Force stopped buffering on ${{vid}}`);
+                                    }}
+                                }}, 100);
+                            }}
+                        }} catch(e) {{}}
+                    }}, 500);
+                    bufferMonitors.set(box, bufferMonitor);
+                    
                     if (autoPlay) {{
-                        debug(`▶️ AUTO-PLAY after click for ${{vid}}`);
-                        event.target.playVideo();
+                        setTimeout(() => {{
+                            debug(`🎬 AUTO-PLAY: ${{vid}}`);
+                            event.target.playVideo();
+                        }}, 100);
                     }}
                     
+                    // Strict ended handler
                     event.target.addEventListener('onStateChange', function(stateEvent) {{
                         const state = stateEvent.data;
-                        if (state === YT.PlayerState.ENDED) {{
-                            debug(`⏹️ VIDEO ENDED (duration reached: ${{durationSec}}s) -> destroying player: ${{vid}}`);
+                        if (state === 0) {{ // ENDED
+                            debug(`⏹️ ENDED (${durationSec}s reached): ${{vid}} -> destroying`);
                             const currentPlayer = loadedPlayers.get(box);
                             if (currentPlayer) destroyVideo(box, currentPlayer);
-                        }} else if (state === YT.PlayerState.PLAYING) {{
-                            debug(`▶️ PLAYBACK STARTED: ${{vid}} | watch minutes counting`);
+                        }} else if (state === 1) {{ // PLAYING
+                            debug(`🎥 PLAYING: ${{vid}} | Watch time counting`);
+                            // Force quality again when playing
                             try {{
                                 event.target.setPlaybackQuality('tiny');
                             }} catch(e) {{}}
@@ -328,23 +376,27 @@ html = f"""
                     }});
                 }},
                 onError: (err) => {{
-                    debug(`❌ Player error for ${{vid}}: ${{err.data}}`);
+                    debug(`❌ ERROR ${{vid}}: ${{err.data}}`, true);
                 }}
             }}
         }});
     }}
     
     function shuffleAndLoad() {{
-        debug(`🔄 SHUFFLE + LOAD (data-saver mode) - destroying all current players`);
+        debug(`🔄 SHUFFLE MODE - Destroying all players to stop buffering`);
         
+        // Destroy everything
         for (let [box, player] of loadedPlayers.entries()) {{
             if (playerIntervals.has(box)) {{
                 clearInterval(playerIntervals.get(box));
                 playerIntervals.delete(box);
             }}
+            if (bufferMonitors.has(box)) {{
+                clearInterval(bufferMonitors.get(box));
+                bufferMonitors.delete(box));
+            }}
             try {{
-                if(player.stopVideo) player.stopVideo();
-                if(player.destroy) player.destroy();
+                if(player) player.destroy();
             }} catch(e) {{}}
             loadedPlayers.delete(box);
             box.innerHTML = '';
@@ -357,6 +409,7 @@ html = f"""
             box.style.opacity = '1';
         }}
         
+        // Shuffle
         let boxes = [...gridContainer.children];
         for(let i = boxes.length - 1; i > 0; i--) {{
             const j = Math.floor(Math.random() * (i + 1));
@@ -366,29 +419,31 @@ html = f"""
         boxes.forEach(b => gridContainer.appendChild(b));
         updateLoadingProgress();
         
+        // Load with delays, NO auto-play to save data
         let currentDelay = 0;
         boxes.forEach((box, idx) => {{
-            const staggerInterval = 1000 + Math.random() * 11000;
+            const staggerDelay = 800 + Math.random() * 8000;
             setTimeout(() => {{
                 if (YT_API_ready && !box.classList.contains('loaded')) {{
                     loadPlayer(box, false);
-                    debug(`🔄 Staggered load #${{idx+1}}: ${{box.dataset.video}}`);
+                    debug(`🔄 Loaded #${{idx+1}}: ${{box.dataset.video}}`);
                 }}
             }}, currentDelay);
-            currentDelay += staggerInterval;
+            currentDelay += staggerDelay;
         }});
-        debug(`✅ Shuffle complete: ${{boxes.length}} videos loading with ${{Math.round(currentDelay/1000)}}s staggered delay`);
+        debug(`✅ Shuffled ${{boxes.length}} videos | No pre-buffering | Click to play`);
     }}
     
+    // Click handler
     document.querySelectorAll(".video-box").forEach(box => {{
         box.addEventListener("click", function(e) {{
             e.stopPropagation();
-            debug(`👆 Click on video: ${{this.dataset.video}}`);
+            debug(`👆 CLICK: ${{this.dataset.video}}`);
             if (this.classList.contains("loaded")) {{
                 playVideo(this);
             }} else {{
                 if (!YT_API_ready) {{
-                    debug(`API not ready yet`);
+                    debug(`API not ready`);
                     return;
                 }}
                 loadPlayer(this, true);
@@ -396,18 +451,15 @@ html = f"""
         }});
     }});
     
-    document.getElementById("shuffle-load").onclick = function() {{
-        if (YT_API_ready) {{
-            shuffleAndLoad();
-        }} else {{
-            debug("API not ready, please wait...");
-        }}
+    document.getElementById("shuffle-load").onclick = () => {{
+        if (YT_API_ready) shuffleAndLoad();
+        else debug("Waiting for YouTube API...");
     }};
     
     function onYouTubeIframeAPIReady() {{
         YT_API_ready = true;
-        debug("🎬 YouTube API ready — STRICT DATA SAVER MODE ACTIVE");
-        debug("💡 Each video capped at 36-50 seconds | 144p quality | No extra buffering");
+        debug("🎬 YouTube API READY | AGGRESSIVE BUFFER CONTROL ENABLED");
+        debug("⚡ Videos capped at 36-50s | 144p | Buffer killing active");
         updateLoadingProgress();
     }}
     
