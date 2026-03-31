@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(layout="wide", page_title="YouTube Grid - Smart Buffer Control")
+st.set_page_config(layout="wide", page_title="YouTube Grid - Zero Excess Buffering")
 
 video_id = "LxTZnjraVrM"
 video_ids = [video_id] * 50
@@ -39,7 +39,6 @@ html = f"""
         cursor: pointer;
         aspect-ratio: 16/9;
         position: relative;
-        transition: opacity 0.3s ease;
         background: #111;
         border-radius: 8px;
         overflow: hidden;
@@ -48,6 +47,12 @@ html = f"""
         width: 100%;
         height: 100%;
         object-fit: cover;
+        border-radius: 8px;
+    }}
+    iframe {{
+        width: 100%;
+        height: 100%;
+        border: none;
         border-radius: 8px;
     }}
     .button-container {{
@@ -69,7 +74,6 @@ html = f"""
         font-weight: 600;
         border-radius: 40px;
         cursor: pointer;
-        transition: 0.2s;
     }}
     button:hover {{
         background: #cc0000;
@@ -106,8 +110,7 @@ html = f"""
         font-family: monospace;
         font-size: 10px;
         z-index: 10001;
-        width: 380px;
-        border-left: 3px solid #ff0000;
+        width: 400px;
         max-height: 300px;
         overflow: auto;
     }}
@@ -137,22 +140,22 @@ html = f"""
         display: none !important;
     }}
     .data-warning {{
-        background: #1e2a1e;
-        border-left: 4px solid #ffaa00;
+        background: #2a1e1e;
+        border-left: 4px solid #ff4444;
         padding: 6px 12px;
         font-size: 12px;
-        color: #ffdd99;
+        color: #ff9999;
         border-radius: 20px;
     }}
 </style>
 
 <div class="button-container">
-    <button id="shuffle-load">🔀 Shuffle + Load (Smart Buffer)</button>
+    <button id="shuffle-load">🔀 Shuffle + Load (ZERO Buffer)</button>
     <span class="loading-status" id="loading-status">📦 0/50 loaded</span>
     <div class="loading-bar">
         <div class="loading-progress" id="loading-progress"></div>
     </div>
-    <div class="data-warning">⚡ Smart buffering: Only loads up to 50s | 144p | Data saver</div>
+    <div class="data-warning">⚠️ STRICT MODE: Videos DESTROYED at {36-50}s - NO background buffering</div>
 </div>
 
 <div id="video-grid">
@@ -161,7 +164,7 @@ html = f"""
 
 <div class="debug-console" id="debug-console">
     <div class="debug-header">
-        <span>📊 SMART BUFFER CONTROL</span>
+        <span>🔴 ZERO BUFFER MODE - Active</span>
         <button id="toggle-debug">Hide</button>
     </div>
     <div class="debug-content" id="debug-content"></div>
@@ -174,10 +177,10 @@ html = f"""
     const VIDEO_ID = "{video_id}";
     let YT_API_ready = false;
     let loadedPlayers = new Map();
-    let playerIntervals = new Map();
     let debugContent = document.getElementById("debug-content");
     let toggleDebug = document.getElementById("toggle-debug");
     let gridContainer = document.getElementById("video-grid");
+    let activePlayTimers = new Map();
     
     function debug(msg) {{
         console.log(msg);
@@ -212,39 +215,68 @@ html = f"""
         progressFill.style.width = percent + "%";
     }}
     
-    function destroyVideo(box, player) {{
-        debug("🔥 Removing video: " + box.dataset.video);
-        if (playerIntervals.has(box)) {{
-            clearInterval(playerIntervals.get(box));
-            playerIntervals.delete(box);
+    // FORCE STOP - completely destroys player to stop all buffering
+    function forceStopAndDestroy(box, player, reason) {{
+        debug("💀 FORCE STOP: " + box.dataset.video + " | Reason: " + reason);
+        
+        if (activePlayTimers.has(box)) {{
+            clearTimeout(activePlayTimers.get(box));
+            activePlayTimers.delete(box);
         }}
+        
         try {{
             if (player && player.stopVideo) player.stopVideo();
             if (player && player.destroy) player.destroy();
         }} catch(e) {{}}
+        
         loadedPlayers.delete(box);
-        box.style.transition = 'opacity 0.5s ease';
-        box.style.opacity = '0';
-        setTimeout(() => {{
-            if (box.parentNode) {{
-                box.remove();
-                updateLoadingProgress();
-                debug("✅ Video removed from grid");
-            }}
-        }}, 500);
-    }}
-    
-    function playVideo(box) {{
-        const player = loadedPlayers.get(box);
-        if (player && typeof player.playVideo === 'function') {{
-            debug("▶️ PLAYING: " + box.dataset.video);
-            player.setVolume(100);
-            player.playVideo();
-        }}
+        
+        // Restore thumbnail
+        box.innerHTML = '';
+        const thumbImg = document.createElement('img');
+        thumbImg.src = "https://i.ytimg.com/vi_webp/" + VIDEO_ID + "/mqdefault.webp";
+        thumbImg.loading = 'lazy';
+        thumbImg.className = 'thumb';
+        box.appendChild(thumbImg);
+        box.classList.remove('loaded');
+        box.style.opacity = '1';
+        updateLoadingProgress();
+        
+        debug("✅ Video destroyed - no more buffering possible");
     }}
     
     function getRandomDuration() {{
         return Math.floor(Math.random() * (50 - 36 + 1)) + 36;
+    }}
+    
+    function playWithTimeout(box, player, durationSeconds) {{
+        debug("▶️ Playing: " + box.dataset.video + " for " + durationSeconds + " seconds");
+        player.setVolume(100);
+        player.playVideo();
+        
+        // CRITICAL: Set a timer to destroy the video EXACTLY at duration
+        const timer = setTimeout(() => {{
+            debug("⏰ TIME'S UP! Destroying video after " + durationSeconds + "s: " + box.dataset.video);
+            if (loadedPlayers.get(box) === player) {{
+                forceStopAndDestroy(box, player, "duration reached");
+            }}
+        }}, durationSeconds * 1000);
+        
+        activePlayTimers.set(box, timer);
+        
+        // Also monitor state changes to catch ENDED event early
+        const stateHandler = function(stateEvent) {{
+            if (stateEvent.data === 0) {{ // ENDED
+                debug("⏹️ Video ended naturally: " + box.dataset.video);
+                if (activePlayTimers.has(box)) {{
+                    clearTimeout(activePlayTimers.get(box));
+                    activePlayTimers.delete(box);
+                }}
+                forceStopAndDestroy(box, player, "video ended");
+                player.removeEventListener('onStateChange', stateHandler);
+            }}
+        }};
+        player.addEventListener('onStateChange', stateHandler);
     }}
     
     function loadPlayer(box, autoPlay = false) {{
@@ -253,7 +285,7 @@ html = f"""
         const vid = box.dataset.video;
         const durationSec = getRandomDuration();
         
-        debug("⏳ Loading " + vid + " | will play " + durationSec + " seconds only");
+        debug("⏳ Loading player for: " + vid + " (will play max " + durationSec + "s)");
         
         box.innerHTML = '';
         const playerDiv = document.createElement("div");
@@ -262,6 +294,7 @@ html = f"""
         box.appendChild(playerDiv);
         box.classList.add("loaded");
         
+        // Use minimal buffer by setting low quality and no extra features
         const player = new YT.Player(playerDiv, {{
             height: '100%',
             width: '100%',
@@ -272,8 +305,6 @@ html = f"""
                 rel: 0,
                 modestbranding: 1,
                 playsinline: 1,
-                start: 0,
-                end: durationSec,
                 vq: 'tiny',
                 iv_load_policy: 3,
                 enablejsapi: 1
@@ -282,61 +313,41 @@ html = f"""
                 onReady: (event) => {{
                     loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
-                    debug("✅ Player ready: " + vid + " | Duration cap: " + durationSec + "s | Quality: 144p");
+                    debug("✅ Player ready: " + vid + " | 144p quality");
                     event.target.setVolume(100);
                     
-                    const qualityInterval = setInterval(() => {{
-                        try {{
-                            const currentQuality = event.target.getPlaybackQuality();
-                            if (currentQuality !== 'tiny' && currentQuality !== 'small') {{
-                                event.target.setPlaybackQuality('tiny');
-                                debug("📺 Forced 144p quality for " + vid);
-                            }}
-                        }} catch(e) {{}}
-                    }}, 3000);
-                    playerIntervals.set(box, qualityInterval);
+                    // Force lowest quality immediately
+                    try {{
+                        event.target.setPlaybackQuality('tiny');
+                    }} catch(e) {{}}
                     
                     if (autoPlay) {{
-                        setTimeout(() => {{
-                            debug("🎬 Auto-playing: " + vid);
-                            event.target.playVideo();
-                        }}, 200);
+                        playWithTimeout(box, event.target, durationSec);
                     }}
-                    
-                    event.target.addEventListener('onStateChange', function(stateEvent) {{
-                        const state = stateEvent.data;
-                        if (state === 0) {{
-                            debug("⏹️ Video ended (" + durationSec + "s): " + vid);
-                            const currentPlayer = loadedPlayers.get(box);
-                            if (currentPlayer) {{
-                                setTimeout(() => {{
-                                    if (box.parentNode) {{
-                                        destroyVideo(box, currentPlayer);
-                                    }}
-                                }}, 1000);
-                            }}
-                        }} else if (state === 1) {{
-                            debug("🎥 Now playing: " + vid + " (watch time counting)");
-                        }}
-                    }});
                 }},
                 onError: (err) => {{
-                    debug("❌ Error loading " + vid + ": " + err.data);
+                    debug("❌ Error: " + vid + " - " + err.data);
+                    box.classList.remove('loaded');
+                    updateLoadingProgress();
                 }}
             }}
         }});
     }}
     
     function shuffleAndLoad() {{
-        debug("🔄 Shuffling and reloading grid...");
+        debug("🔄 SHUFFLE MODE - Destroying ALL active players to stop buffering");
         
+        // Kill all active videos immediately
         for (let [box, player] of loadedPlayers.entries()) {{
-            if (playerIntervals.has(box)) {{
-                clearInterval(playerIntervals.get(box));
-                playerIntervals.delete(box);
+            if (activePlayTimers.has(box)) {{
+                clearTimeout(activePlayTimers.get(box));
+                activePlayTimers.delete(box);
             }}
             try {{
-                if(player) player.destroy();
+                if(player) {{
+                    player.stopVideo();
+                    player.destroy();
+                }}
             }} catch(e) {{}}
             loadedPlayers.delete(box);
             box.innerHTML = '';
@@ -349,6 +360,7 @@ html = f"""
             box.style.opacity = '1';
         }}
         
+        // Shuffle grid
         let boxes = [...gridContainer.children];
         for(let i = boxes.length - 1; i > 0; i--) {{
             const j = Math.floor(Math.random() * (i + 1));
@@ -358,45 +370,45 @@ html = f"""
         boxes.forEach(b => gridContainer.appendChild(b));
         updateLoadingProgress();
         
-        let currentDelay = 500;
-        boxes.forEach((box, idx) => {{
-            setTimeout(() => {{
-                if (YT_API_ready && !box.classList.contains('loaded')) {{
-                    loadPlayer(box, false);
-                    debug("🔄 Loaded #" + (idx+1) + ": " + box.dataset.video);
-                }}
-            }}, currentDelay);
-            currentDelay += 800 + Math.random() * 5000;
-        }});
-        debug("✅ Shuffled " + boxes.length + " videos | Click any to play");
+        debug("✅ Grid shuffled. Click any video to play (will stop after 36-50s)");
     }}
     
+    // Click handler - load and play with hard timeout
     document.querySelectorAll(".video-box").forEach(box => {{
         box.addEventListener("click", function(e) {{
             e.stopPropagation();
-            debug("👆 Clicked: " + this.dataset.video);
-            if (this.classList.contains("loaded")) {{
-                playVideo(this);
-            }} else {{
-                if (!YT_API_ready) {{
-                    debug("⏳ YouTube API not ready yet, please wait");
+            debug("👆 CLICK: " + this.dataset.video);
+            
+            // If already loaded and playing, don't do anything
+            if (this.classList.contains("loaded") && loadedPlayers.has(this)) {{
+                const player = loadedPlayers.get(this);
+                if (player && player.getPlayerState && player.getPlayerState() === 1) {{
+                    debug("Video already playing: " + this.dataset.video);
                     return;
                 }}
-                loadPlayer(this, true);
             }}
+            
+            if (!YT_API_ready) {{
+                debug("⏳ YouTube API not ready");
+                return;
+            }}
+            
+            // Load and auto-play
+            loadPlayer(this, true);
         }});
     }});
     
     document.getElementById("shuffle-load").onclick = () => {{
         if (YT_API_ready) shuffleAndLoad();
-        else debug("⏳ Waiting for YouTube API to initialize...");
+        else debug("Waiting for YouTube API...");
     }};
     
     function onYouTubeIframeAPIReady() {{
         YT_API_ready = true;
-        debug("🎬 YouTube API Ready - Smart buffer mode active");
-        debug("💡 Each video capped at 36-50 seconds | 144p quality");
-        debug("💡 Click any video to play - no automatic pre-buffering");
+        debug("🎬 YouTube API READY - ZERO BUFFER MODE ACTIVE");
+        debug("⚡ CRITICAL: Videos will be DESTROYED after 36-50 seconds");
+        debug("⚡ NO background buffering - each video stops exactly at limit");
+        debug("💡 Click any video to play - it will self-destruct after duration");
         updateLoadingProgress();
     }}
     
