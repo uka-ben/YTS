@@ -150,13 +150,6 @@ html = f"""
         color: #ffdd99;
         border-radius: 20px;
     }}
-    .critical-buffer {{
-        background: #2a1e1e;
-        border-left: 4px solid #ff4444;
-        padding: 4px 8px;
-        font-size: 11px;
-        color: #ff9999;
-    }}
 </style>
 
 <div class="button-container">
@@ -226,25 +219,6 @@ html = f"""
         progressFill.style.width = percent + "%";
     }}
     
-    // AGGRESSIVE: Kill any buffering by seeking and pausing
-    function killBuffering(player, box) {{
-        try {{
-            if (player && player.getPlayerState) {{
-                let state = player.getPlayerState();
-                // If buffering, immediately pause and seek to current time to stop pre-fetch
-                if (state === 3) {{ // YT.PlayerState.BUFFERING
-                    debug(`⚠️ KILLING BUFFER on ${{box.dataset.video}}`);
-                    player.pauseVideo();
-                    setTimeout(() => {{
-                        if (player && player.playVideo && !player.getPlayerState() === 1) {{
-                            // Don't resume - wait for user action
-                        }}
-                    }}, 50);
-                }}
-            }}
-        }} catch(e) {{}}
-    }}
-    
     function destroyVideo(box, player) {{
         debug(`🔥 DESTROYING video: ${{box.dataset.video}}`);
         if (playerIntervals.has(box)) {{
@@ -299,7 +273,6 @@ html = f"""
         box.appendChild(playerDiv);
         box.classList.add("loaded");
         
-        // CRITICAL: Use minimal buffer by setting low quality and no related videos
         const player = new YT.Player(playerDiv, {{
             height: '100%',
             width: '100%',
@@ -314,17 +287,15 @@ html = f"""
                 end: durationSec,
                 vq: 'tiny',
                 iv_load_policy: 3,
-                enablejsapi: 1,
-                origin: window.location.origin
+                enablejsapi: 1
             }},
             events: {{
                 onReady: (event) => {{
                     loadedPlayers.set(box, event.target);
                     updateLoadingProgress();
-                    debug(`✅ READY: ${{vid}} | ${durationSec}s limit | 144p quality`);
+                    debug(`✅ READY: ${{vid}} | ${{durationSec}}s limit | 144p quality`);
                     event.target.setVolume(100);
                     
-                    // Force quality to lowest every second
                     const qualityInterval = setInterval(() => {{
                         try {{
                             if (event.target && event.target.setPlaybackQuality) {{
@@ -334,11 +305,10 @@ html = f"""
                     }}, 1000);
                     playerIntervals.set(box, qualityInterval);
                     
-                    // Monitor for buffering and kill it immediately
                     const bufferMonitor = setInterval(() => {{
                         try {{
                             let state = event.target.getPlayerState();
-                            if (state === 3) {{ // BUFFERING
+                            if (state === 3) {{
                                 debug(`🔴 BUFFER DETECTED on ${{vid}} - KILLING IT`);
                                 event.target.pauseVideo();
                                 setTimeout(() => {{
@@ -359,16 +329,14 @@ html = f"""
                         }}, 100);
                     }}
                     
-                    // Strict ended handler
                     event.target.addEventListener('onStateChange', function(stateEvent) {{
                         const state = stateEvent.data;
-                        if (state === 0) {{ // ENDED
-                            debug(`⏹️ ENDED (${durationSec}s reached): ${{vid}} -> destroying`);
+                        if (state === 0) {{
+                            debug(`⏹️ ENDED (${{durationSec}}s reached): ${{vid}} -> destroying`);
                             const currentPlayer = loadedPlayers.get(box);
                             if (currentPlayer) destroyVideo(box, currentPlayer);
-                        }} else if (state === 1) {{ // PLAYING
+                        }} else if (state === 1) {{
                             debug(`🎥 PLAYING: ${{vid}} | Watch time counting`);
-                            // Force quality again when playing
                             try {{
                                 event.target.setPlaybackQuality('tiny');
                             }} catch(e) {{}}
@@ -385,7 +353,6 @@ html = f"""
     function shuffleAndLoad() {{
         debug(`🔄 SHUFFLE MODE - Destroying all players to stop buffering`);
         
-        // Destroy everything
         for (let [box, player] of loadedPlayers.entries()) {{
             if (playerIntervals.has(box)) {{
                 clearInterval(playerIntervals.get(box));
@@ -393,7 +360,7 @@ html = f"""
             }}
             if (bufferMonitors.has(box)) {{
                 clearInterval(bufferMonitors.get(box));
-                bufferMonitors.delete(box));
+                bufferMonitors.delete(box);
             }}
             try {{
                 if(player) player.destroy();
@@ -409,7 +376,6 @@ html = f"""
             box.style.opacity = '1';
         }}
         
-        // Shuffle
         let boxes = [...gridContainer.children];
         for(let i = boxes.length - 1; i > 0; i--) {{
             const j = Math.floor(Math.random() * (i + 1));
@@ -419,7 +385,6 @@ html = f"""
         boxes.forEach(b => gridContainer.appendChild(b));
         updateLoadingProgress();
         
-        // Load with delays, NO auto-play to save data
         let currentDelay = 0;
         boxes.forEach((box, idx) => {{
             const staggerDelay = 800 + Math.random() * 8000;
@@ -434,7 +399,6 @@ html = f"""
         debug(`✅ Shuffled ${{boxes.length}} videos | No pre-buffering | Click to play`);
     }}
     
-    // Click handler
     document.querySelectorAll(".video-box").forEach(box => {{
         box.addEventListener("click", function(e) {{
             e.stopPropagation();
