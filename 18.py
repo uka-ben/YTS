@@ -194,7 +194,7 @@ function updateProgressBar(box, player, duration, startTime) {{
                 box.progressInterval = null;
             }}
         }} catch(e) {{
-            // Silent fail
+            // Silent fail - don't affect other videos
         }}
     }}, 500);
     
@@ -220,7 +220,7 @@ function forceQuality(player, box) {{
                 }}
             }}
         }} catch(e) {{
-            // Silent fail
+            // Silent fail - don't affect other videos
         }}
     }}, 1500);
     
@@ -580,7 +580,7 @@ qualitySelect.addEventListener("change", () => {{
                 player.setPlaybackQuality(qualitySelect.value);
             }}
         }} catch(e) {{
-            // Silent fail
+            // Silent fail - don't affect other videos
         }}
     }}
 }});
