@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(layout="wide", page_title="YouTube Player - Smart Buffer Control")
+st.set_page_config(layout="wide", page_title="YouTube Player")
 
 video_id = "LxTZnjraVrM"
 
@@ -13,82 +13,32 @@ html = f"""
 </head>
 <body>
 <style>
-    .video-container {{
+    body {{
+        margin: 0;
+        padding: 0;
         background: #000;
-        padding: 20px;
+    }}
+    .video-container {{
         display: flex;
         justify-content: center;
         align-items: center;
         min-height: 100vh;
+        background: #000;
     }}
     .video-box {{
         cursor: pointer;
         width: 100%;
-        max-width: 800px;
+        max-width: 1200px;
         aspect-ratio: 16/9;
         position: relative;
-        background: #111;
-        border-radius: 8px;
-        overflow: hidden;
+        background: #000;
     }}
     iframe {{
         width: 100%;
         height: 100%;
         border: none;
-        border-radius: 8px;
-    }}
-    .button-container {{
-        display: flex;
-        gap: 16px;
-        margin-bottom: 20px;
-        align-items: center;
-        flex-wrap: wrap;
-        background: #0f0f0f;
-        padding: 12px 16px;
-        border-radius: 40px;
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        right: 20px;
-        z-index: 100;
-    }}
-    button {{
-        background: #ff0000;
-        border: none;
-        color: white;
-        padding: 8px 24px;
-        font-size: 15px;
-        font-weight: 600;
-        border-radius: 40px;
-        cursor: pointer;
-        transition: 0.2s;
-    }}
-    button:hover {{
-        background: #cc0000;
-    }}
-    .loading-status {{
-        color: #ddd;
-        font-size: 14px;
-        background: #2a2a2a;
-        padding: 6px 14px;
-        border-radius: 30px;
-        font-family: monospace;
-    }}
-    .data-warning {{
-        background: #1e2a1e;
-        border-left: 4px solid #ffaa00;
-        padding: 6px 12px;
-        font-size: 12px;
-        color: #ffdd99;
-        border-radius: 20px;
     }}
 </style>
-
-<div class="button-container">
-    <button id="reload-player">🔄 Reload Player</button>
-    <span class="loading-status" id="loading-status">📦 Player ready</span>
-    <div class="data-warning">⚡ Smart buffering: Only loads up to 50s | 144p | Data saver</div>
-</div>
 
 <div class="video-container">
     <div class="video-box" id="video-box" data-video="{video_id}">
@@ -103,15 +53,6 @@ html = f"""
     let currentPlayer = null;
     let qualityInterval = null;
     let videoBox = document.getElementById("video-box");
-    
-    function updateLoadingStatus() {{
-        let statusSpan = document.getElementById("loading-status");
-        if (currentPlayer && currentPlayer.getPlayerState) {{
-            statusSpan.textContent = "📦 Player loaded";
-        }} else {{
-            statusSpan.textContent = "📦 Player ready";
-        }}
-    }}
     
     function destroyVideo() {{
         if (qualityInterval) {{
@@ -163,7 +104,6 @@ html = f"""
             events: {{
                 onReady: (event) => {{
                     currentPlayer = event.target;
-                    updateLoadingStatus();
                     currentPlayer.setVolume(100);
                     
                     qualityInterval = setInterval(() => {{
@@ -187,7 +127,6 @@ html = f"""
                             setTimeout(() => {{
                                 destroyVideo();
                                 videoBox.innerHTML = '';
-                                updateLoadingStatus();
                             }}, 1000);
                         }}
                     }});
@@ -198,12 +137,6 @@ html = f"""
             }}
         }});
     }}
-    
-    document.getElementById("reload-player").onclick = () => {{
-        if (YT_API_ready) {{
-            loadPlayer(false);
-        }}
-    }};
     
     videoBox.addEventListener("click", function(e) {{
         e.stopPropagation();
@@ -225,8 +158,6 @@ html = f"""
     
     function onYouTubeIframeAPIReady() {{
         YT_API_ready = true;
-        updateLoadingStatus();
-        // Load player immediately
         loadPlayer(false);
     }}
     
