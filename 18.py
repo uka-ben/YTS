@@ -19,17 +19,17 @@ html = f"""
         background: #000;
     }}
     .video-container {{
+        background: #000;
         display: flex;
         justify-content: center;
         align-items: center;
-        min-height: 100vh;
-        background: #000;
+        height: 100vh;
+        width: 100vw;
     }}
     .video-box {{
         cursor: pointer;
         width: 100%;
-        max-width: 1200px;
-        aspect-ratio: 16/9;
+        height: 100%;
         position: relative;
         background: #000;
     }}
