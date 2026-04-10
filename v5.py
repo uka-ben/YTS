@@ -52,18 +52,6 @@ font-size:16px;
 cursor:pointer;
 margin-bottom:10px;
 }}
-.replay-indicator {{
-position:absolute;
-bottom:8px;
-right:8px;
-background:rgba(0,0,0,0.7);
-color:#4CAF50;
-padding:4px 8px;
-border-radius:4px;
-font-size:12px;
-z-index:10;
-pointer-events:none;
-}}
 </style>
 
 <button id="shuffle-load">Shuffle + Load Players</button>
@@ -76,14 +64,27 @@ pointer-events:none;
 
 <script>
 let YT_API_ready = false;
-let activePlayers = new Map();
-let playerTimeouts = new Map();
 let qualityIntervals = new Map();
-let hasPlayed = new Map();
+let durationTimeouts = new Map();
+let activePlayers = new Map();
+let videoDurations = new Map();
 
 function onYouTubeIframeAPIReady() {{
     YT_API_ready = true;
     console.log("API Ready");
+}}
+
+function forceQuality(player, box) {{
+    try {{
+        const currentQuality = player.getPlaybackQuality();
+        console.log("Current quality:", currentQuality);
+        if (currentQuality !== 'tiny' && currentQuality !== 'small') {{
+            player.setPlaybackQuality('tiny');
+            console.log("Forced tiny quality");
+        }}
+    }} catch(e) {{
+        console.log("Quality error:", e);
+    }}
 }}
 
 function loadPlayer(box) {{
@@ -91,8 +92,9 @@ function loadPlayer(box) {{
 
     const vid = box.dataset.video;
     const duration = Math.floor(Math.random()*(46-35+1))+35;
+    videoDurations.set(box, duration);
     
-    console.log("Loading " + vid + " with duration " + duration + "s");
+    console.log("Loading video:", vid, "Duration:", duration + "s");
 
     box.innerHTML = '';
     box.classList.add("loaded");
@@ -110,109 +112,94 @@ function loadPlayer(box) {{
             rel: 0,
             modestbranding: 1,
             playsinline: 1,
-            vq: 'tiny'
+            vq: 'tiny',
+            enablejsapi: 1,
+            origin: window.location.origin
         }},
         events: {{
             onReady: (event) => {{
+                console.log("Player ready:", vid);
                 activePlayers.set(box, event.target);
-                hasPlayed.set(box, false);
-                console.log("Player ready: " + vid);
-            }},
-            onStateChange: (event) => {{
-                const state = event.data;
-                const player = event.target;
                 
-                if (state === 1) {{ // PLAYING
-                    console.log("Playing: " + vid);
+                // Try to set quality immediately
+                setTimeout(() => forceQuality(event.target, box), 500);
+                setTimeout(() => forceQuality(event.target, box), 1000);
+                setTimeout(() => forceQuality(event.target, box), 2000);
+                
+                /* Aggressive quality forcing */
+                const qualityInterval = setInterval(() => {{
+                    forceQuality(event.target, box);
+                }}, 800);
+                
+                qualityIntervals.set(box, qualityInterval);
+                
+                /* Track state changes for duration */
+                event.target.addEventListener('onStateChange', (stateEvent) => {{
+                    const state = stateEvent.data;
+                    console.log("State change:", vid, state);
                     
-                    // Force 144p immediately when playing starts
-                    setTimeout(() => {{
-                        try {{
-                            player.setPlaybackQuality('tiny');
-                            console.log("Quality forced to tiny");
-                        }} catch(e){{}}
-                    }}, 200);
-                    
-                    // Keep forcing quality every 2 seconds
-                    if (qualityIntervals.has(box)) {{
-                        clearInterval(qualityIntervals.get(box));
-                    }}
-                    const interval = setInterval(() => {{
-                        try {{
-                            player.setPlaybackQuality('tiny');
-                        }} catch(e){{}}
-                    }}, 2000);
-                    qualityIntervals.set(box, interval);
-                    
-                    // Only set duration timeout on FIRST play
-                    if (!hasPlayed.get(box)) {{
-                        hasPlayed.set(box, true);
+                    if (state === 1) {{ // PLAYING
+                        console.log("Playing:", vid);
+                        forceQuality(event.target, box);
                         
                         // Clear any existing timeout
-                        if (playerTimeouts.has(box)) {{
-                            clearTimeout(playerTimeouts.get(box));
+                        if (durationTimeouts.has(box)) {{
+                            clearTimeout(durationTimeouts.get(box));
                         }}
                         
-                        // Set timeout to pause and reset after duration
+                        // Set new timeout for duration
+                        const dur = videoDurations.get(box);
+                        console.log("Setting timeout for:", dur + "s");
+                        
                         const timeout = setTimeout(() => {{
-                            console.log("Duration reached: " + duration + "s");
+                            console.log("Duration reached, pausing:", vid);
                             const p = activePlayers.get(box);
                             if (p) {{
                                 p.pauseVideo();
                                 p.seekTo(0);
-                                clearInterval(qualityIntervals.get(box));
-                                qualityIntervals.delete(box);
-                                
-                                const indicator = document.createElement('div');
-                                indicator.className = 'replay-indicator';
-                                indicator.textContent = '↻ Ready to replay (no data)';
-                                box.appendChild(indicator);
-                                setTimeout(() => indicator.remove(), 3000);
                             }}
-                        }}, duration * 1000);
+                            durationTimeouts.delete(box);
+                        }}, dur * 1000);
                         
-                        playerTimeouts.set(box, timeout);
+                        durationTimeouts.set(box, timeout);
                     }}
-                }}
-                
-                if (state === 2) {{ // PAUSED
-                    clearInterval(qualityIntervals.get(box));
-                    qualityIntervals.delete(box);
-                }}
-                
-                if (state === 0) {{ // ENDED
-                    clearInterval(qualityIntervals.get(box));
-                    qualityIntervals.delete(box);
-                }}
+                    
+                    if (state === 0) {{ // ENDED
+                        console.log("Ended naturally:", vid);
+                        if (durationTimeouts.has(box)) {{
+                            clearTimeout(durationTimeouts.get(box));
+                            durationTimeouts.delete(box);
+                        }}
+                    }}
+                }});
+            }},
+            onError: (error) => {{
+                console.log("Error:", vid, error.data);
             }}
-        }}
-    }});
-    
-    // Click handler
-    box.addEventListener("click", () => {{
-        const player = activePlayers.get(box);
-        if (player) {{
-            console.log("Click - playing video");
-            player.playVideo();
         }}
     }});
 }}
 
 document.querySelectorAll(".video-box").forEach(box => {{
-    box.addEventListener("click", () => loadPlayer(box));
+    box.addEventListener("click", () => {{
+        console.log("Clicked:", box.dataset.video);
+        loadPlayer(box);
+    }});
 }});
 
 document.getElementById("shuffle-load").onclick = () => {{
-    // Clean up everything
+    console.log("Shuffling...");
+    
+    // Clean up
     for (let [box, interval] of qualityIntervals) {{
         clearInterval(interval);
     }}
     qualityIntervals.clear();
     
-    for (let [box, timeout] of playerTimeouts) {{
+    for (let [box, timeout] of durationTimeouts) {{
         clearTimeout(timeout);
     }}
-    playerTimeouts.clear();
+    durationTimeouts.clear();
     
     for (let [box, player] of activePlayers) {{
         try {{
@@ -220,7 +207,7 @@ document.getElementById("shuffle-load").onclick = () => {{
         }} catch(e) {{}}
     }}
     activePlayers.clear();
-    hasPlayed.clear();
+    videoDurations.clear();
     
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
@@ -243,7 +230,9 @@ document.getElementById("shuffle-load").onclick = () => {{
     let delay = 0;
     boxes.forEach(box => {{
         let randomDelay = 1000 + Math.random() * 4000;
-        setTimeout(() => loadPlayer(box), delay);
+        setTimeout(() => {{
+            loadPlayer(box);
+        }}, delay);
         delay += randomDelay;
     }});
 }};
