@@ -37,11 +37,14 @@ height:100%;
 object-fit:cover;
 border-radius:6px;
 }}
-iframe {{
+.video-box iframe {{
 width:100%;
 height:100%;
 border:none;
 border-radius:6px;
+position:absolute;
+top:0;
+left:0;
 }}
 button {{
 padding:10px 20px;
@@ -57,85 +60,141 @@ margin-bottom:10px;
 {''.join(html_blocks)}
 </div>
 
+<script src="https://www.youtube.com/iframe_api"></script>
+
 <script>
-function loadPlayer(box){{
-    if(box.classList.contains("loaded")) return
+let YT_API_ready = false;
+let activePlayers = new Map();
+let durationTimeouts = new Map();
 
-    const vid = box.dataset.video
-
-    /* mixed start strategy */
-    let start
-    if(Math.random() < 0.7){{
-        start = 0
-    }}else{{
-        start = Math.floor(Math.random()*200)
-    }}
-
-    const duration = Math.floor(Math.random()*(46-35+1))+35
-    const end = start + duration
-
-    const iframe = document.createElement("iframe")
-    iframe.src =
-    "https://www.youtube.com/embed/"+vid+
-    "?autoplay=0"+
-    "&controls=1"+
-    "&rel=0"+
-    "&modestbranding=1"+
-    "&vq=tiny"+
-    "&start="+start+
-    "&end="+end
-
-    iframe.allow="autoplay"
-    box.innerHTML=""
-    box.appendChild(iframe)
-    box.classList.add("loaded")
-
-    /* detect play click */
-    box.addEventListener("click",()=>{{
-        setTimeout(()=>{{
-            try {{
-                iframe.contentWindow.postMessage(JSON.stringify({{
-                    event:'command',
-                    func:'setPlaybackQuality',
-                    args:['tiny']
-                }}),'*')
-            }} catch(e){{}}
-        }},1000)
-
-        /* remove player after duration */
-        setTimeout(()=>{{
-            iframe.src=""
-            box.style.opacity=0
-            setTimeout(()=>box.remove(),1000)
-        }}, duration*1000)
-    }},{{once:true}})
+function onYouTubeIframeAPIReady() {{
+    YT_API_ready = true;
 }}
 
-document.querySelectorAll(".video-box").forEach(box=>{{
-    box.addEventListener("click",()=>loadPlayer(box))
-}})
+function loadPlayer(box) {{
+    if(box.classList.contains("loaded") || !YT_API_ready) return;
 
-document.getElementById("shuffle-load").onclick=()=>{{
-    let grid=document.getElementById("video-grid")
-    let boxes=[...grid.children]
+    const vid = box.dataset.video;
+    const duration = Math.floor(Math.random()*(46-35+1))+35;
+
+    box.innerHTML = '';
+    box.classList.add("loaded");
+
+    const playerDiv = document.createElement("div");
+    box.appendChild(playerDiv);
+
+    const player = new YT.Player(playerDiv, {{
+        height: '100%',
+        width: '100%',
+        videoId: vid,
+        playerVars: {{
+            autoplay: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            vq: 'tiny',
+            fs: 0,
+            iv_load_policy: 3
+        }},
+        events: {{
+            onReady: (event) => {{
+                activePlayers.set(box, event.target);
+                
+                /* Force tiny player size to trick YouTube into serving 144p */
+                const iframe = box.querySelector('iframe');
+                if (iframe) {{
+                    iframe.style.width = '100%';
+                    iframe.style.height = '100%';
+                    iframe.style.maxWidth = '256px';
+                    iframe.style.maxHeight = '144px';
+                    iframe.style.margin = 'auto';
+                    iframe.style.display = 'block';
+                }}
+                
+                box.addEventListener("click", () => {{
+                    const p = activePlayers.get(box);
+                    if (p) {{
+                        p.playVideo();
+                        
+                        /* Clear existing timeout */
+                        if (durationTimeouts.has(box)) {{
+                            clearTimeout(durationTimeouts.get(box));
+                        }}
+                        
+                        /* Set timeout to pause and reset after duration */
+                        const timeout = setTimeout(() => {{
+                            const player = activePlayers.get(box);
+                            if (player) {{
+                                player.pauseVideo();
+                                player.seekTo(0);
+                            }}
+                            durationTimeouts.delete(box);
+                        }}, duration * 1000);
+                        
+                        durationTimeouts.set(box, timeout);
+                    }}
+                }});
+            }},
+            onStateChange: (event) => {{
+                /* When video ends naturally, clear timeout */
+                if (event.data === 0) {{
+                    if (durationTimeouts.has(box)) {{
+                        clearTimeout(durationTimeouts.get(box));
+                        durationTimeouts.delete(box);
+                    }}
+                }}
+            }}
+        }}
+    }});
+}}
+
+document.querySelectorAll(".video-box").forEach(box => {{
+    box.addEventListener("click", () => loadPlayer(box));
+}});
+
+document.getElementById("shuffle-load").onclick = () => {{
+    /* Clean up timeouts */
+    for (let [box, timeout] of durationTimeouts) {{
+        clearTimeout(timeout);
+    }}
+    durationTimeouts.clear();
+    
+    /* Destroy players */
+    for (let [box, player] of activePlayers) {{
+        try {{
+            player.destroy();
+        }} catch(e) {{}}
+    }}
+    activePlayers.clear();
+    
+    let grid = document.getElementById("video-grid");
+    let boxes = [...grid.children];
 
     /* shuffle grid */
-    for(let i=boxes.length-1;i>0;i--) {{
-        let j=Math.floor(Math.random()*(i+1))
-        ;[boxes[i],boxes[j]]=[boxes[j],boxes[i]]
+    for(let i = boxes.length - 1; i > 0; i--) {{
+        let j = Math.floor(Math.random() * (i + 1));
+        [boxes[i], boxes[j]] = [boxes[j], boxes[i]];
     }}
-    boxes.forEach(b=>grid.appendChild(b))
+    boxes.forEach(b => grid.appendChild(b));
+
+    /* Reset boxes */
+    boxes.forEach(b => {{
+        b.innerHTML = `<img src="https://i.ytimg.com/vi_webp/${{b.dataset.video}}/mqdefault.webp" loading="lazy" class="thumb">`;
+        b.classList.remove('loaded');
+        b.style.opacity = '1';
+    }});
 
     /* sequential loading with 1–5s random delay */
-    let delay=0
-    boxes.forEach(box=>{{
-        let randomDelay = 1000 + Math.random()*4000  // 1–5 seconds
-        setTimeout(()=>{{
-            loadPlayer(box)
-        }}, delay)
-        delay += randomDelay
-    }})
-}}
+    let delay = 0;
+    boxes.forEach(box => {{
+        let randomDelay = 1000 + Math.random() * 4000;
+        setTimeout(() => {{
+            loadPlayer(box);
+        }}, delay);
+        delay += randomDelay;
+    }});
+}};
 </script>
 """
 
