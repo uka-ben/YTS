@@ -29,7 +29,6 @@ gap:8px;
 cursor:pointer;
 aspect-ratio:16/9;
 position:relative;
-transition:opacity 1s;
 }}
 .thumb {{
 width:100%;
@@ -37,7 +36,7 @@ height:100%;
 object-fit:cover;
 border-radius:6px;
 }}
-iframe {{
+.video-box iframe {{
 width:100%;
 height:100%;
 border:none;
@@ -61,6 +60,7 @@ margin-bottom:10px;
 
 <script>
 let YT_API_ready = false;
+let loadedPlayers = new Map();
 let qualityIntervals = new Map();
 
 function onYouTubeIframeAPIReady() {{
@@ -71,8 +71,6 @@ function loadPlayer(box) {{
     if(box.classList.contains("loaded") || !YT_API_ready) return;
 
     const vid = box.dataset.video;
-    
-    /* Normal start from beginning */
     const duration = Math.floor(Math.random()*(46-35+1))+35;
 
     box.innerHTML = '';
@@ -97,9 +95,11 @@ function loadPlayer(box) {{
         }},
         events: {{
             onReady: (event) => {{
-                let qualityInterval = null;
+                loadedPlayers.set(box, event.target);
                 
-                /* V15's exact quality forcing pattern */
+                let qualityInterval = null;
+                let hasPlayedOnce = false;
+                
                 event.target.addEventListener('onStateChange', function(e) {{
                     if(e.data == YT.PlayerState.PLAYING) {{
                         if (qualityInterval) clearInterval(qualityInterval);
@@ -109,30 +109,37 @@ function loadPlayer(box) {{
                                 event.target.setPlaybackQuality('tiny');
                             }} catch(e){{}}
                         }}, 1000);
+                        qualityIntervals.set(box, qualityInterval);
+                        
+                        /* Only set up end detection on first play */
+                        if (!hasPlayedOnce) {{
+                            hasPlayedOnce = true;
+                            /* When video reaches end, just reset to beginning */
+                            setTimeout(() => {{
+                                try {{
+                                    event.target.seekTo(0);
+                                    event.target.pauseVideo();
+                                }} catch(e) {{}}
+                            }}, duration * 1000);
+                        }}
                     }} else if (e.data == YT.PlayerState.ENDED) {{
-                        if (qualityInterval) clearInterval(qualityInterval);
+                        /* Reset to beginning when ended */
                         try {{
-                            event.target.destroy();
+                            event.target.seekTo(0);
+                            event.target.pauseVideo();
                         }} catch(e) {{}}
-                        box.style.opacity = 0;
-                        setTimeout(() => box.remove(), 1000);
                     }}
                 }});
                 
-                /* Click to play */
+                /* Click to play/pause */
                 box.addEventListener("click", () => {{
-                    event.target.playVideo();
-                    
-                    /* Fallback removal after duration */
-                    setTimeout(() => {{
-                        if (qualityInterval) clearInterval(qualityInterval);
-                        try {{
-                            event.target.destroy();
-                        }} catch(e) {{}}
-                        box.style.opacity = 0;
-                        setTimeout(() => box.remove(), 1000);
-                    }}, duration * 1000);
-                }}, {{once: true}});
+                    const state = event.target.getPlayerState();
+                    if (state === 1) {{  // Playing
+                        event.target.pauseVideo();
+                    }} else {{  // Paused, ended, or not started
+                        event.target.playVideo();
+                    }}
+                }});
             }}
         }}
     }});
@@ -148,6 +155,14 @@ document.getElementById("shuffle-load").onclick = () => {{
         clearInterval(interval);
     }}
     qualityIntervals.clear();
+    
+    /* Destroy all players */
+    for (let [box, player] of loadedPlayers) {{
+        try {{
+            player.destroy();
+        }} catch(e) {{}}
+    }}
+    loadedPlayers.clear();
     
     let grid = document.getElementById("video-grid");
     let boxes = [...grid.children];
@@ -169,7 +184,7 @@ document.getElementById("shuffle-load").onclick = () => {{
     /* sequential loading with 1–5s random delay */
     let delay = 0;
     boxes.forEach(box => {{
-        let randomDelay = 1000 + Math.random() * 4000;  // 1–5 seconds
+        let randomDelay = 1000 + Math.random() * 4000;
         setTimeout(() => {{
             loadPlayer(box);
         }}, delay);
