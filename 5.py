@@ -22,8 +22,8 @@ html = f"""
 background:#000;
 padding:20px;
 display:grid;
-grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-gap:8px;
+grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+gap:12px;
 }}
 .video-box {{
 cursor:pointer;
@@ -35,19 +35,19 @@ transition:opacity 1s;
 width:100%;
 height:100%;
 object-fit:cover;
-border-radius:6px;
+border-radius:8px;
 }}
 iframe {{
 width:100%;
 height:100%;
 border:none;
-border-radius:6px;
+border-radius:8px;
 }}
 button {{
-padding:10px 20px;
+padding:12px 24px;
 font-size:16px;
 cursor:pointer;
-margin-bottom:10px;
+margin-bottom:15px;
 }}
 </style>
 
