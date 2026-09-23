@@ -2,8 +2,8 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-video_id = "N0UGPsUmE28"
-video_ids = [video_id] * 20
+video_id = "ywivtZhyjx4"
+video_ids = [video_id] * 50
 
 html_blocks = []
 for idx, vid in enumerate(video_ids):
